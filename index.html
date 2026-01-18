@@ -30,14 +30,9 @@
       }
     </style>
     <script>
-      // Polyfill for process.env to ensure the app doesn't crash on static hosts
-      // and to inject the user-provided key.
-      window.process = {
-        env: {
-          NODE_ENV: 'production',
-          API_KEY: 'AIzaSyCEbHiixjlWq6RVBbFUEQJQFv1_mUo8spc'
-        }
-      };
+      // Explicitly set the API key on the window object to bypass build-time 
+      // process.env replacement which causes the "API Key must be set" error.
+      window.GEMINI_API_KEY = 'AIzaSyCEbHiixjlWq6RVBbFUEQJQFv1_mUo8spc';
     </script>
     <script type="importmap">
     {

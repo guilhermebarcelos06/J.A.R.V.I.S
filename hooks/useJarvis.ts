@@ -144,7 +144,11 @@ export const useJarvis = ({ onCommand }: UseJarvisProps = {}) => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Access key safely from window (for production) or process.env (for local dev)
+      const apiKey = (window as any).GEMINI_API_KEY || process.env.API_KEY;
+      if (!apiKey) throw new Error("API Key not found. Please check configuration.");
+
+      const ai = new GoogleGenAI({ apiKey });
 
       // Establish Connection
       sessionPromiseRef.current = ai.live.connect({

@@ -7,9 +7,18 @@ export const useChat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const chatSessionRef = useRef<any>(null);
 
+  const getApiKey = () => {
+     return (window as any).GEMINI_API_KEY || process.env.API_KEY;
+  };
+
   const initializeChat = useCallback(async () => {
     if (!chatSessionRef.current) {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            console.error("API Key missing");
+            return;
+        }
+        const ai = new GoogleGenAI({ apiKey });
         chatSessionRef.current = ai.chats.create({
             model: 'gemini-3-flash-preview',
             config: {
@@ -34,6 +43,8 @@ export const useChat = () => {
 
     try {
         await initializeChat();
+        if (!chatSessionRef.current) throw new Error("Chat initialization failed");
+
         const result = await chatSessionRef.current.sendMessage({ message: text });
         
         const responseText = result.text;
@@ -73,7 +84,10 @@ export const useChat = () => {
       setIsLoading(true);
 
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const apiKey = getApiKey();
+        if (!apiKey) throw new Error("API Key missing");
+
+        const ai = new GoogleGenAI({ apiKey });
         // Using gemini-2.5-flash-image for general image generation
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
