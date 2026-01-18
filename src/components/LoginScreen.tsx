@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server, Loader2 } from 'lucide-react';
+import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server, Loader2, Wifi, CheckCircle, XCircle } from 'lucide-react';
 
 // Dynamic Backend URL resolution with LocalStorage override
 const getBackendUrl = () => {
@@ -25,6 +25,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   // Config Modal State
   const [showConfig, setShowConfig] = useState(false);
   const [configUrl, setConfigUrl] = useState(getBackendUrl());
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'fail'>('idle');
+  const [testMessage, setTestMessage] = useState('');
 
   useEffect(() => {
     let interval: number;
@@ -78,10 +80,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         clearTimeout(timeoutId);
         clearTimeout(wakeUpTimer);
 
-        // Handle non-JSON responses (often server errors or 404s HTML)
         const contentType = res.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
-            throw new Error(`Invalid Server Response: ${res.status} ${res.statusText}`);
+            throw new Error(`Invalid Response Type (Received HTML/Text instead of JSON)`);
         }
 
         const data = await res.json();
@@ -100,22 +101,49 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         if (err.name === 'AbortError') {
              setErrorMessage('Connection Timed Out. Server sleeping?');
         } else {
-             setErrorMessage('Cannot reach Mainframe');
+             setErrorMessage(err.message || 'Cannot reach Mainframe');
         }
-        // Stay in error state so user can see the config button
     }
+  };
+
+  const testConnection = async () => {
+      setTestStatus('testing');
+      setTestMessage('Pinging server...');
+      
+      let url = configUrl.trim().replace(/\/$/, '');
+      // Auto-correct HTTP/HTTPS if missing
+      if (!url.startsWith('http')) {
+          url = `https://${url}`;
+      }
+
+      try {
+          const res = await fetch(`${url}/`, { method: 'GET' });
+          if (res.ok) {
+              setTestStatus('success');
+              setTestMessage('Signal Established: Online');
+          } else {
+              setTestStatus('fail');
+              setTestMessage(`Server Error: ${res.status}`);
+          }
+      } catch (e: any) {
+          setTestStatus('fail');
+          setTestMessage(`Failed: ${e.message}`);
+      }
   };
 
   const saveConfig = () => {
       let url = configUrl.trim().replace(/\/$/, '');
+      // Strict https enforcement for netlify
       if (!url.startsWith('http')) {
           url = `https://${url}`;
       }
+      
       localStorage.setItem('jarvis_backend_url', url);
+      setConfigUrl(url); // Update local state formatted
       setShowConfig(false);
       setErrorMessage('');
       setStatus('idle');
-      window.location.reload(); // Reload to ensure all hooks pick up the new URL
+      window.location.reload(); 
   };
 
   if (showConfig) {
@@ -135,15 +163,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                             type="text" 
                             value={configUrl}
                             onChange={(e) => setConfigUrl(e.target.value)}
-                            placeholder="https://jarvis-backend.onrender.com"
+                            placeholder="https://your-app.onrender.com"
                             className="w-full bg-black/50 border border-cyan-900 rounded p-3 text-cyan-100 font-mono text-xs focus:border-cyan-400 focus:outline-none"
                         />
                         <p className="text-[10px] text-cyan-800 mt-2">
-                            Enter the full URL of your Render backend. Do not include a trailing slash.
+                            Enter the full URL of your Render backend.
                         </p>
                     </div>
 
-                    <div className="flex gap-3 mt-6">
+                    {/* Test Results Display */}
+                    <div className={`p-3 rounded border text-xs font-mono flex items-center gap-2 ${
+                        testStatus === 'idle' ? 'border-gray-800 text-gray-500' :
+                        testStatus === 'testing' ? 'border-cyan-800 text-cyan-400 bg-cyan-900/10' :
+                        testStatus === 'success' ? 'border-green-800 text-green-400 bg-green-900/10' :
+                        'border-red-800 text-red-400 bg-red-900/10'
+                    }`}>
+                        {testStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
+                        {testStatus === 'success' && <CheckCircle size={14} />}
+                        {testStatus === 'fail' && <XCircle size={14} />}
+                        {testMessage || "Ready to test connection"}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={testConnection}
+                            className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs uppercase font-mono rounded flex items-center justify-center gap-2"
+                        >
+                            <Wifi size={14} />
+                            Test Signal
+                        </button>
+                    </div>
+
+                    <div className="flex gap-3 mt-6 border-t border-gray-800 pt-4">
                         <button 
                             onClick={() => setShowConfig(false)}
                             className="flex-1 py-3 border border-red-900/50 text-red-500 rounded hover:bg-red-900/20 font-mono text-xs uppercase"
@@ -252,6 +303,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                     >
                         Configure Server Link manually
                     </button>
+                    {/* Display currently used URL for debugging */}
+                    <div className="text-[8px] text-gray-600 text-center font-mono">
+                        Target: {getBackendUrl()}
+                    </div>
                 </div>
             )}
             

@@ -41,14 +41,6 @@ if (MONGO_URI) {
         .catch(err => {
             console.error('❌ MongoDB Connection Error:', err.message);
             isDbConnected = false;
-            
-            // Help debug by showing the masked URI (hides password)
-            const maskedURI = MONGO_URI.replace(/:([^@]+)@/, ':****@');
-            console.error(`Attempted to connect to: ${maskedURI}`);
-
-            if ((MONGO_URI.match(/@/g) || []).length > 1) {
-                console.error(`\n💡 HINT: Your connection string has multiple '@' symbols. If your password contains '@', you MUST replace it with '%40'.`);
-            }
         });
 } else {
     console.warn('⚠️ MONGO_URI not found. Running in ephemeral mode.');
@@ -57,7 +49,7 @@ if (MONGO_URI) {
 // --- SCHEMAS ---
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
-    password: { type: String, required: true }, // In production, hash this!
+    password: { type: String, required: true },
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -78,7 +70,14 @@ const Chat = mongoose.model('Chat', chatSchema);
 
 // --- ROUTES ---
 
-app.get('/', (req, res) => res.send('Jarvis Backend Online'));
+// Health Check - Returns JSON for frontend connectivity test
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'online', 
+        message: 'Jarvis Backend Operational',
+        service: 'render'
+    });
+});
 
 app.get('/api/config', (req, res) => {
   res.json({ apiKey: API_KEY });
@@ -86,7 +85,6 @@ app.get('/api/config', (req, res) => {
 
 // AUTH: Register
 app.post('/api/register', async (req, res) => {
-    // Check if DB is actually connected
     if (!MONGO_URI || !isDbConnected || mongoose.connection.readyState !== 1) {
         return res.status(503).json({ error: 'Database disconnected. Use admin/jarvis to login.' });
     }
@@ -111,8 +109,6 @@ app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        // Fallback to Local Mode if DB is down or not configured
-        // This ensures you can always log in as Admin even if Mongo fails
         if (!MONGO_URI || !isDbConnected || mongoose.connection.readyState !== 1) {
             console.warn('⚠️ Login attempted in Offline/Emergency Mode');
             if (username.toLowerCase() === 'admin' && password.toLowerCase() === 'jarvis') {
@@ -128,7 +124,6 @@ app.post('/api/login', async (req, res) => {
             res.status(401).json({ error: 'Invalid credentials' });
         }
     } catch (error) {
-        // Final safety net for login
         if (req.body.username?.toLowerCase() === 'admin' && req.body.password?.toLowerCase() === 'jarvis') {
              return res.json({ success: true, userId: 'local-admin', username: 'Admin' });
         }
@@ -149,10 +144,9 @@ app.get('/api/chat/:userId', async (req, res) => {
 
 // CHAT: Save History
 app.post('/api/chat', async (req, res) => {
-    if (!MONGO_URI || !isDbConnected) return res.json({ success: true }); // Mock success
+    if (!MONGO_URI || !isDbConnected) return res.json({ success: true });
     try {
         const { userId, messages } = req.body;
-        // Don't save for local admin
         if (userId === 'local-admin') return res.json({ success: true });
 
         await Chat.findOneAndUpdate(
@@ -171,7 +165,6 @@ app.post('/api/youtube-search', async (req, res) => {
     try {
         const { query } = req.body;
         if (!query) return res.status(400).json({ error: 'Query required' });
-        console.log(`Searching YouTube for: ${query}`);
         const filters1 = await ytsr.getFilters(query);
         const filter1 = filters1.get('Type').get('Video');
         
@@ -190,7 +183,6 @@ app.post('/api/youtube-search', async (req, res) => {
             return res.status(404).json({ success: false, error: 'No videos found' });
         }
     } catch (error) {
-        console.error('YouTube Search Error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -200,7 +192,6 @@ app.post('/api/generate-image', async (req, res) => {
     try {
         const { prompt } = req.body;
         if (!prompt) return res.status(400).json({ error: 'Prompt required' });
-        console.log(`Generating image for: ${prompt}`);
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: [{ parts: [{ text: prompt }] }],
@@ -222,7 +213,6 @@ app.post('/api/generate-image', async (req, res) => {
             return res.status(500).json({ success: false, error: 'No image data returned' });
         }
     } catch (error) {
-        console.error('Image Gen Error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
