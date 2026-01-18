@@ -61,9 +61,10 @@ const PLAY_VIDEO_TOOL: FunctionDeclaration = {
 interface UseJarvisProps {
     onCommand?: (command: string) => void;
     onPlayVideo?: (videoId: string, title: string) => void;
+    enabled?: boolean;
 }
 
-export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
+export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisProps = {}) => {
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5); 
@@ -109,6 +110,8 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
 
   // Fetch API Key
   useEffect(() => {
+    if (!enabled) return;
+
     const fetchKey = async (retries = 3) => {
         try {
             const res = await fetch(`${BACKEND_URL}/api/config`);
@@ -119,17 +122,27 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
                     return;
                 }
             }
+            throw new Error("No key in response");
         } catch (e) {
-            console.warn(`Backend check failed. Retries left: ${retries}`);
-            if (retries > 0) setTimeout(() => fetchKey(retries - 1), 2000);
-            else {
-                const envKey = process.env.API_KEY || (window as any).GEMINI_API_KEY;
-                if (envKey) setFetchedApiKey(envKey);
+            if (retries > 0) {
+                // Silently retry or log sparingly
+                setTimeout(() => fetchKey(retries - 1), 2000);
+            } else {
+                // Final fallback to local environment
+                const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+                               (import.meta as any).env?.VITE_API_KEY ||
+                               (window as any).GEMINI_API_KEY;
+                if (envKey) {
+                    console.log("Jarvis: Using local environment key fallback.");
+                    setFetchedApiKey(envKey);
+                } else {
+                    console.warn("Jarvis: Backend unreachable and no local key found. Voice commands may fail.");
+                }
             }
         }
     };
     fetchKey();
-  }, []);
+  }, [enabled]);
 
   const cleanup = useCallback(() => {
     if (mediaStreamRef.current) {
@@ -158,7 +171,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
   const connect = useCallback(async () => {
     try {
       if (!fetchedApiKey) {
-          setError(`System Offline. Backend unreachable.`);
+          setError(`Authentication Failed: No API Key.`);
           return;
       }
 
@@ -168,12 +181,9 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       const InputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       const OutputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       
-      // FIX: Do not force 16000Hz here. Let the browser pick the native rate (usually 44.1k/48k).
-      // We will downsample manually to 16000Hz later.
       inputAudioContextRef.current = new InputContextClass();
       outputAudioContextRef.current = new OutputContextClass({ sampleRate: 24000 });
 
-      // Resume Contexts immediately (browsers block autoplay)
       await inputAudioContextRef.current.resume();
       await outputAudioContextRef.current.resume();
       
@@ -188,7 +198,6 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       gainNode.connect(outputAudioContextRef.current.destination);
       gainNodeRef.current = gainNode;
 
-      // Get Microphone Stream
       const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
               echoCancellation: true,
@@ -212,13 +221,11 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           Keep answers short unless asked for detail.
           Use tools for volume, tabs, or video.
           Do not disconnect automatically.`,
-          // Removed TERMINATE_TOOL from here
           tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
         },
         callbacks: {
           onopen: () => {
             setConnectionState(ConnectionState.CONNECTED);
-            console.log("Link Established");
             
             if (!inputAudioContextRef.current || !stream) return;
             
@@ -226,14 +233,11 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             const processor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
             scriptProcessorRef.current = processor;
 
-            // Get the actual sample rate of the device
             const inputSampleRate = inputAudioContextRef.current.sampleRate;
             console.log(`Mic Rate: ${inputSampleRate}Hz. Downsampling to 16000Hz.`);
 
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
-              
-              // CRITICAL FIX: Downsample from Device Rate -> 16000Hz
               const downsampledData = downsampleBuffer(inputData, inputSampleRate, 16000);
               const pcmBlob = createPcmBlob(downsampledData);
               
@@ -241,9 +245,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
                 sessionPromiseRef.current.then((session) => {
                   try {
                     session.sendRealtimeInput({ media: pcmBlob });
-                  } catch (err) {
-                    // Ignore send errors if closing
-                  }
+                  } catch (err) { }
                 });
               }
             };
@@ -317,7 +319,6 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           onclose: (e) => {
             console.log("Session Closed", e);
             if (connectionStateRef.current === ConnectionState.CONNECTED) {
-                 // Only cleanup if we expected to stay connected
                  setConnectionState(ConnectionState.DISCONNECTED);
                  cleanup();
             }

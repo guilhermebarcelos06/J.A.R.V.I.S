@@ -25,13 +25,24 @@ export const useChat = (userId?: string) => {
             const res = await fetch(`${BACKEND_URL}/api/config`);
             if (res.ok) {
                 const data = await res.json();
-                if (data.apiKey) setFetchedApiKey(data.apiKey);
+                if (data.apiKey) {
+                    setFetchedApiKey(data.apiKey);
+                    return;
+                }
             }
+            throw new Error("Backend config check failed");
         } catch (e) {
-            console.warn("Backend unavailable for chat config");
-             // Fallback
-             const envKey = process.env.API_KEY || (window as any).GEMINI_API_KEY;
-             if (envKey) setFetchedApiKey(envKey);
+             console.warn("Chat: Backend unavailable, checking local environment keys...");
+             // Fallback to client-side env var if backend fails
+             const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+                            (import.meta as any).env?.VITE_API_KEY || 
+                            (window as any).GEMINI_API_KEY;
+             if (envKey) {
+                 console.log("Chat: Using local fallback key");
+                 setFetchedApiKey(envKey);
+             } else {
+                 console.warn("Chat: No API key found in Backend or Local Environment");
+             }
         }
     };
     fetchKey();
@@ -39,7 +50,7 @@ export const useChat = (userId?: string) => {
 
   // Load History when userId changes
   useEffect(() => {
-      if (!userId) return;
+      if (!userId || userId === 'local-admin') return;
       
       const loadHistory = async () => {
           try {
@@ -51,7 +62,7 @@ export const useChat = (userId?: string) => {
                   }
               }
           } catch (e) {
-              console.error("Failed to load history", e);
+              console.warn("History unavailable (Offline Mode)");
           }
       };
       loadHistory();
@@ -59,7 +70,7 @@ export const useChat = (userId?: string) => {
 
   // Save History Function
   const saveHistory = useCallback(async (newMessages: ChatMessage[]) => {
-      if (!userId) return;
+      if (!userId || userId === 'local-admin') return;
       try {
           await fetch(`${BACKEND_URL}/api/chat`, {
               method: 'POST',
@@ -67,7 +78,8 @@ export const useChat = (userId?: string) => {
               body: JSON.stringify({ userId, messages: newMessages })
           });
       } catch (e) {
-          console.error("Failed to save history", e);
+          // Silent fail for history saving in offline mode
+          console.warn("Failed to save history to backend");
       }
   }, [userId]);
 
@@ -107,7 +119,7 @@ export const useChat = (userId?: string) => {
     setIsLoading(true);
 
     try {
-        if (!fetchedApiKey) throw new Error("Server disconnected");
+        if (!fetchedApiKey) throw new Error("API Key not found. Please check settings or .env file.");
         
         await initializeChat();
         if (!chatSessionRef.current) throw new Error("Chat initialization failed");
@@ -126,12 +138,12 @@ export const useChat = (userId?: string) => {
         setMessages(finalMessages);
         saveHistory(finalMessages);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Chat Error:", error);
         const errorMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: 'model',
-            text: "Error: Unable to reach Jarvis Mainframe (Backend).",
+            text: `Error: ${error.message || "Unable to reach Jarvis Mainframe."}`,
             timestamp: Date.now(),
         };
         setMessages(prev => [...prev, errorMsg]);
@@ -156,26 +168,59 @@ export const useChat = (userId?: string) => {
       setIsLoading(true);
 
       try {
-        // Use the backend proxy for image generation
-        const response = await fetch(`${BACKEND_URL}/api/generate-image`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
-        });
+        let imageUrl: string | undefined;
 
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.statusText}`);
+        // 1. Try Backend
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/generate-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.imageUrl) {
+                    imageUrl = data.imageUrl;
+                }
+            }
+        } catch (backendError) {
+            console.warn("Backend unavailable for image, switching to client-side generation...");
         }
 
-        const data = await response.json();
+        // 2. Client-side Fallback
+        if (!imageUrl) {
+            if (!fetchedApiKey) throw new Error("API Key missing. Cannot generate image without backend or local key.");
+            
+            const ai = new GoogleGenAI({ apiKey: fetchedApiKey });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: { parts: [{ text: prompt }] },
+                config: {
+                    imageConfig: { aspectRatio: "1:1" },
+                    // Safety settings for direct client call
+                    safetySettings: [
+                        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+                    ]
+                }
+            });
+
+            const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (part && part.inlineData) {
+                imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            }
+        }
 
         let aiMsg: ChatMessage;
 
-        if (data.success && data.imageUrl) {
+        if (imageUrl) {
             aiMsg = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
-                image: data.imageUrl,
+                image: imageUrl,
                 text: "Visual rendering complete.",
                 timestamp: Date.now(),
             };
@@ -203,7 +248,7 @@ export const useChat = (userId?: string) => {
       } finally {
           setIsLoading(false);
       }
-  }, [messages, saveHistory]);
+  }, [messages, saveHistory, fetchedApiKey]);
 
   return {
     messages,
