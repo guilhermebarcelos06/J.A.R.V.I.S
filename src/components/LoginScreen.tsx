@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server } from 'lucide-react';
+import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server, Loader2 } from 'lucide-react';
 
 // Dynamic Backend URL resolution with LocalStorage override
 const getBackendUrl = () => {
@@ -51,17 +51,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     try {
         const endpoint = isRegistering ? '/api/register' : '/api/login';
         
-        // Artificial delay for effect
+        // Artificial delay for UI effect
         await new Promise(resolve => setTimeout(resolve, 1500));
 
         const backend = getBackendUrl();
         console.log("Attempting connection to:", backend);
 
+        // Handler for Render Cold Start (Free tier takes up to 60s to wake up)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+        
+        // Notify user if it's taking longer than usual (Cold Start)
+        const wakeUpTimer = setTimeout(() => {
+            if (status !== 'granted' && status !== 'denied') {
+                setErrorMessage("Waking up Mainframe... (Cold Start)");
+            }
+        }, 3000);
+
         const res = await fetch(`${backend}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
+        clearTimeout(wakeUpTimer);
 
         // Handle non-JSON responses (often server errors or 404s HTML)
         const contentType = res.headers.get("content-type");
@@ -82,7 +97,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     } catch (err: any) {
         console.error(err);
         setStatus('error');
-        setErrorMessage('Cannot reach Mainframe');
+        if (err.name === 'AbortError') {
+             setErrorMessage('Connection Timed Out. Server sleeping?');
+        } else {
+             setErrorMessage('Cannot reach Mainframe');
+        }
         // Stay in error state so user can see the config button
     }
   };
@@ -221,8 +240,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
             {(status === 'denied' || status === 'error') && (
                 <div className="flex flex-col gap-2">
-                    <div className="text-red-500 text-xs font-mono text-center bg-red-950/20 border border-red-900/50 p-2 rounded animate-pulse">
-                        ERROR: {errorMessage}
+                    <div className="text-red-500 text-xs font-mono text-center bg-red-950/20 border border-red-900/50 p-2 rounded animate-pulse flex items-center justify-center gap-2">
+                        {errorMessage.includes('Waking') && <Loader2 size={12} className="animate-spin" />}
+                        {errorMessage}
                     </div>
                     {/* Manual Config Button - Shows when error occurs */}
                     <button
@@ -233,6 +253,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                         Configure Server Link manually
                     </button>
                 </div>
+            )}
+            
+            {/* Show waking message during scan if valid */}
+            {status === 'scanning' && errorMessage && (
+                 <div className="text-cyan-400 text-xs font-mono text-center animate-pulse mt-2 flex items-center justify-center gap-2">
+                     <Loader2 size={12} className="animate-spin" />
+                     {errorMessage}
+                 </div>
             )}
 
             <button
