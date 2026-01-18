@@ -15,7 +15,12 @@ app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
 
 // --- DATABASE CONFIGURATION ---
-const MONGO_URI = process.env.MONGO_URI;
+// CLEANUP: Remove accidental quotes or whitespace from the connection string
+let MONGO_URI = process.env.MONGO_URI;
+if (MONGO_URI) {
+    MONGO_URI = MONGO_URI.trim().replace(/^["']|["']$/g, '');
+}
+
 const API_KEY = process.env.API_KEY || "AIzaSyCEbHiixjlWq6RVBbFUEQJQFv1_mUo8spc";
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
@@ -23,7 +28,12 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 if (MONGO_URI) {
     mongoose.connect(MONGO_URI)
         .then(() => console.log('✅ Connected to MongoDB Cloud'))
-        .catch(err => console.error('❌ MongoDB Connection Error:', err));
+        .catch(err => {
+            console.error('❌ MongoDB Connection Error:', err.message);
+            // Help debug by showing the masked URI (hides password)
+            const maskedURI = MONGO_URI.replace(/:([^@]+)@/, ':****@');
+            console.error(`Attempted to connect to: ${maskedURI}`);
+        });
 } else {
     console.warn('⚠️ MONGO_URI not found. Data will not be saved permanently. Set it in your environment variables.');
 }
