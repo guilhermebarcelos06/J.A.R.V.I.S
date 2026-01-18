@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
 import { ChatMessage } from '../types';
 
 export const useChat = () => {
@@ -88,14 +88,27 @@ export const useChat = () => {
         if (!apiKey) throw new Error("API Key missing");
 
         const ai = new GoogleGenAI({ apiKey });
+        
+        console.log("Generating image with prompt:", prompt);
+
         // Using gemini-2.5-flash-image for general image generation
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [{ text: prompt }]
-            },
+            contents: [
+                {
+                    parts: [{ text: prompt }]
+                }
+            ],
             config: {
-                // imageConfig can be added here if needed, defaults are usually fine
+                imageConfig: {
+                    aspectRatio: "1:1"
+                },
+                safetySettings: [
+                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+                ]
             }
         });
 
@@ -122,21 +135,22 @@ export const useChat = () => {
         }
 
         if (!foundImage) {
+             console.warn("No image found in response parts:", response);
              const aiMsg: ChatMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
-                text: "I attempted to generate an image, but the visual processors returned no data.",
+                text: "I attempted to generate an image, but the visual processors returned no data. The prompt might be filtered or the model is busy.",
                 timestamp: Date.now(),
             };
             setMessages(prev => [...prev, aiMsg]);
         }
 
-      } catch (error) {
+      } catch (error: any) {
           console.error("Image Gen Error:", error);
            const errorMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: 'model',
-            text: "Image generation protocol failed.",
+            text: `Image generation protocol failed: ${error.message || "Unknown error"}`,
             timestamp: Date.now(),
         };
         setMessages(prev => [...prev, errorMsg]);
