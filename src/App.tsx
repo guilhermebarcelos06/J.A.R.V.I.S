@@ -4,7 +4,7 @@ import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
 import { ConnectionState } from './types';
-import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings, Server, Key } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -31,9 +31,20 @@ const App: React.FC = () => {
       setVideoData({ id: videoId, title });
   }, []);
 
-  const { connect, disconnect, connectionState, isPlaying, volume, error, analyserNode } = useJarvis({ 
+  const { 
+      connect, 
+      disconnect, 
+      connectionState, 
+      isPlaying, 
+      volume, 
+      error, 
+      analyserNode,
+      isBackendConnected,
+      isApiKeyReady
+  } = useJarvis({ 
       onCommand: handleCommand,
-      onPlayVideo: handlePlayVideo
+      onPlayVideo: handlePlayVideo,
+      enabled: isAuthenticated
   });
 
   const handleToggleConnection = useCallback(() => {
@@ -116,8 +127,23 @@ const App: React.FC = () => {
             <p className="hidden md:block text-[10px] text-cyan-700 tracking-widest mt-1">SYSTEM ONLINE // PROTOCOL GEMINI-LIVE</p>
         </div>
 
-        {/* Tab Navigation & Logout */}
+        {/* Tab Navigation & Status & Logout */}
         <div className="flex items-center gap-2 md:gap-4">
+            
+            {/* STATUS INDICATORS - Made more visible */}
+            <div className="flex flex-col items-end mr-2 gap-1.5">
+                 <div className={`flex items-center gap-1.5 text-[9px] md:text-[10px] font-mono tracking-wider transition-all duration-500 px-2 py-0.5 rounded ${isBackendConnected ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30'}`}>
+                    <Server size={10} className={isBackendConnected ? '' : 'animate-pulse'} />
+                    <span className="hidden sm:inline">{isBackendConnected ? 'MAINFRAME: ON' : 'MAINFRAME: OFF'}</span>
+                    <span className="sm:hidden">SRV</span>
+                 </div>
+                 <div className={`flex items-center gap-1.5 text-[9px] md:text-[10px] font-mono tracking-wider transition-all duration-500 px-2 py-0.5 rounded ${isApiKeyReady ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30'}`}>
+                    <Key size={10} className={isApiKeyReady ? '' : 'animate-pulse'} />
+                    <span className="hidden sm:inline">{isApiKeyReady ? 'KEY: SECURE' : 'KEY: MISSING'}</span>
+                    <span className="sm:hidden">KEY</span>
+                 </div>
+            </div>
+
             <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-cyan-900/30">
                 <button 
                     onClick={() => setActiveTab('voice')}
@@ -135,11 +161,11 @@ const App: React.FC = () => {
                 </button>
             </div>
             
-            <div className="h-8 w-[1px] bg-cyan-900/30 mx-1"></div>
+            <div className="h-8 w-[1px] bg-cyan-900/30 mx-1 hidden sm:block"></div>
 
              <button 
                 onClick={handleResetConnection}
-                className="p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all"
+                className="hidden sm:block p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all"
                 title="Connection Settings"
             >
                 <Settings size={16} />

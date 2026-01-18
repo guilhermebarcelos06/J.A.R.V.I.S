@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server, Loader2, Wifi, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server, Loader2, Wifi, CheckCircle, XCircle, AlertTriangle, Key } from 'lucide-react';
 
 // Dynamic Backend URL resolution with LocalStorage override
 const getBackendUrl = () => {
@@ -22,6 +22,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [scanProgress, setScanProgress] = useState(0);
 
+  // Connection Indicators State
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [keyStatus, setKeyStatus] = useState<'checking' | 'valid' | 'invalid'>('checking');
+
   // Config Modal State
   const [showConfig, setShowConfig] = useState(false);
   const [configUrl, setConfigUrl] = useState(getBackendUrl());
@@ -33,6 +37,46 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const targetUrl = configUrl;
   const isTargetHttp = targetUrl.startsWith('http:');
   const isMixedContent = isHttps && isTargetHttp && !targetUrl.includes('localhost');
+
+  // Initial Health Check
+  useEffect(() => {
+      const checkHealth = async () => {
+          const url = getBackendUrl();
+          try {
+              // Check Basic Connectivity
+              const res = await fetch(`${url}/`, { method: 'GET' });
+              if (res.ok) {
+                  setServerStatus('online');
+                  
+                  // Check API Key via Verify Endpoint
+                  try {
+                    const verifyRes = await fetch(`${url}/api/verify`);
+                    const verifyData = await verifyRes.json();
+                    if (verifyRes.ok && verifyData.success) {
+                        setKeyStatus('valid');
+                    } else {
+                        setKeyStatus('invalid');
+                    }
+                  } catch {
+                      setKeyStatus('invalid');
+                  }
+              } else {
+                  setServerStatus('offline');
+                  setKeyStatus('invalid');
+              }
+          } catch (e) {
+              setServerStatus('offline');
+              // Check if we have a local key as fallback
+              const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
+              if (envKey) {
+                   setKeyStatus('valid'); // Valid local key even if server is offline
+              } else {
+                   setKeyStatus('invalid');
+              }
+          }
+      };
+      checkHealth();
+  }, []);
 
   useEffect(() => {
     let interval: number;
@@ -141,13 +185,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           if (res.ok && data.success) {
               setTestStatus('success');
               setTestMessage(data.message || 'System Online: API Key Valid');
+              setServerStatus('online');
+              setKeyStatus('valid');
           } else {
               setTestStatus('fail');
               setTestMessage(data.error || `Error: ${res.status} (Check Key)`);
+              setServerStatus('online'); // Server is reachable but maybe error
+              setKeyStatus('invalid');
           }
       } catch (e: any) {
           setTestStatus('fail');
           setTestMessage(e.message === 'Failed to fetch' ? 'Network Error / Offline' : e.message);
+          setServerStatus('offline');
       }
   };
 
@@ -245,6 +294,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       {/* Background Effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-900/20 via-black to-black"></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.05)_1px,transparent_1px)] bg-[size:50px_50px] opacity-20"></div>
+
+      {/* TOP RIGHT STATUS INDICATORS */}
+      <div className="absolute top-4 right-16 flex flex-col items-end gap-1 z-50 pointer-events-none">
+          {/* Server Status */}
+          <div className={`flex items-center gap-2 text-[10px] font-mono tracking-widest px-2 py-1 rounded border backdrop-blur-md transition-all duration-500 ${
+              serverStatus === 'online' ? 'bg-green-900/20 border-green-500/30 text-green-400' : 
+              serverStatus === 'offline' ? 'bg-red-900/20 border-red-500/30 text-red-400' :
+              'bg-gray-900/20 border-gray-500/30 text-gray-400'
+          }`}>
+              <Server size={12} className={serverStatus === 'checking' ? 'animate-pulse' : ''} />
+              <span>{serverStatus === 'online' ? 'BACKEND: ON' : serverStatus === 'offline' ? 'BACKEND: OFF' : 'CONNECTING...'}</span>
+          </div>
+          
+          {/* Key Status */}
+           <div className={`flex items-center gap-2 text-[10px] font-mono tracking-widest px-2 py-1 rounded border backdrop-blur-md transition-all duration-500 ${
+              keyStatus === 'valid' ? 'bg-green-900/20 border-green-500/30 text-green-400' : 
+              keyStatus === 'invalid' ? 'bg-red-900/20 border-red-500/30 text-red-400' :
+              'bg-gray-900/20 border-gray-500/30 text-gray-400'
+          }`}>
+              <Key size={12} className={keyStatus === 'checking' ? 'animate-pulse' : ''} />
+              <span>{keyStatus === 'valid' ? 'KEY: SECURE' : keyStatus === 'invalid' ? 'KEY: MISSING' : 'VERIFYING...'}</span>
+          </div>
+      </div>
+
+      {/* Config Button (Absolute) */}
+      <button 
+        onClick={() => setShowConfig(true)}
+        className="absolute top-4 right-4 p-2 text-cyan-900/40 hover:text-cyan-400 border border-transparent hover:border-cyan-500/30 rounded transition-all z-50 bg-black/20"
+        title="System Configuration"
+      >
+          <Settings size={18} />
+      </button>
 
       {/* Main Card */}
       <div className="relative w-full max-w-md p-8 m-4">
@@ -388,14 +469,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                     )}
                 </button>
             </div>
-            
-             <button 
-                onClick={() => setShowConfig(true)}
-                className="absolute top-4 right-4 text-cyan-900/30 hover:text-cyan-500 transition-colors"
-                title="System Configuration"
-             >
-                 <Settings size={14} />
-             </button>
 
           {/* Decorative tech lines */}
           <div className="absolute bottom-4 right-4 flex gap-1">
