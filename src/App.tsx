@@ -4,7 +4,7 @@ import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
 import { ConnectionState } from './types';
-import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -54,6 +54,13 @@ const App: React.FC = () => {
       setUserId(undefined);
       setIsAuthenticated(false);
   }, [disconnect]);
+
+  const handleResetConnection = useCallback(() => {
+      if (window.confirm("Reset server connection settings? This will reload the application.")) {
+          localStorage.removeItem('jarvis_backend_url');
+          window.location.reload();
+      }
+  }, []);
 
   const isConnected = connectionState === ConnectionState.CONNECTED;
 
@@ -127,6 +134,16 @@ const App: React.FC = () => {
                     <span className="hidden md:inline">Terminal</span>
                 </button>
             </div>
+            
+            <div className="h-8 w-[1px] bg-cyan-900/30 mx-1"></div>
+
+             <button 
+                onClick={handleResetConnection}
+                className="p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all"
+                title="Connection Settings"
+            >
+                <Settings size={16} />
+            </button>
 
             <button 
                 onClick={handleLogout}
@@ -150,9 +167,18 @@ const App: React.FC = () => {
             {/* Status Text */}
             <div className="h-16 flex flex-col items-center justify-center gap-2">
               {error ? (
-                <div className="flex items-center gap-2 text-red-500 bg-red-950/30 px-4 py-2 rounded-full border border-red-900/50 backdrop-blur-sm max-w-[90vw] text-center">
-                  <AlertCircle size={16} className="shrink-0" />
-                  <span className="text-xs md:text-sm font-mono truncate">{error}</span>
+                <div className="flex flex-col items-center gap-2 animate-pulse">
+                    <div className="flex items-center gap-2 text-red-500 bg-red-950/30 px-4 py-2 rounded-full border border-red-900/50 backdrop-blur-sm max-w-[90vw] text-center">
+                      <AlertCircle size={16} className="shrink-0" />
+                      <span className="text-xs md:text-sm font-mono truncate">{error}</span>
+                    </div>
+                    {/* Suggest checking settings if error persists */}
+                    <button 
+                        onClick={handleResetConnection}
+                        className="text-[10px] text-cyan-700 hover:text-cyan-400 underline decoration-dashed underline-offset-4"
+                    >
+                        Check Connection Settings
+                    </button>
                 </div>
               ) : (
                 <>

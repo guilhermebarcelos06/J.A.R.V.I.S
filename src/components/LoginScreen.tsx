@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server, Loader2, Wifi, CheckCircle, XCircle } from 'lucide-react';
+import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server, Loader2, Wifi, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
 // Dynamic Backend URL resolution with LocalStorage override
 const getBackendUrl = () => {
@@ -28,6 +28,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'fail'>('idle');
   const [testMessage, setTestMessage] = useState('');
 
+  // Mixed Content Detection
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const targetUrl = configUrl;
+  const isTargetHttp = targetUrl.startsWith('http:');
+  const isMixedContent = isHttps && isTargetHttp && !targetUrl.includes('localhost');
+
   useEffect(() => {
     let interval: number;
     if (status === 'scanning') {
@@ -47,6 +53,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     e.preventDefault();
     if (!username || !password) return;
 
+    if (isMixedContent) {
+        setErrorMessage('Security Block: Cannot connect to HTTP server from HTTPS site.');
+        setStatus('error');
+        setTimeout(() => setShowConfig(true), 1500);
+        return;
+    }
+
     setStatus('scanning');
     setErrorMessage('');
 
@@ -65,7 +78,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         
         // Notify user if it's taking longer than usual (Cold Start)
         const wakeUpTimer = setTimeout(() => {
-            if (status !== 'granted' && status !== 'denied') {
+            if (status === 'scanning') {
                 setErrorMessage("Waking up Mainframe... (Cold Start)");
             }
         }, 3000);
@@ -82,7 +95,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
         const contentType = res.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
-            throw new Error(`Invalid Response Type (Received HTML/Text instead of JSON)`);
+            throw new Error(`Server Error: Received HTML instead of JSON. Check URL.`);
         }
 
         const data = await res.json();
@@ -98,10 +111,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     } catch (err: any) {
         console.error(err);
         setStatus('error');
-        if (err.name === 'AbortError') {
-             setErrorMessage('Connection Timed Out. Server sleeping?');
-        } else {
-             setErrorMessage(err.message || 'Cannot reach Mainframe');
+        
+        let msg = 'Cannot reach Mainframe';
+        if (err.name === 'AbortError') msg = 'Connection Timed Out. Server sleeping?';
+        else if (err.message.includes('Failed to fetch')) msg = 'Network Error. Blocked or Offline.';
+        else msg = err.message;
+        
+        setErrorMessage(msg);
+        
+        // Auto-open config on network failures
+        if (msg.includes('Network') || msg.includes('HTML')) {
+            setTimeout(() => setShowConfig(true), 2000);
         }
     }
   };
@@ -111,35 +131,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       setTestMessage('Pinging server...');
       
       let url = configUrl.trim().replace(/\/$/, '');
-      // Auto-correct HTTP/HTTPS if missing
-      if (!url.startsWith('http')) {
-          url = `https://${url}`;
-      }
+      if (!url.startsWith('http')) url = `https://${url}`;
 
       try {
           const res = await fetch(`${url}/`, { method: 'GET' });
           if (res.ok) {
+              const data = await res.json().catch(() => ({}));
               setTestStatus('success');
-              setTestMessage('Signal Established: Online');
+              setTestMessage(data.message || 'Signal Established: Online');
           } else {
               setTestStatus('fail');
               setTestMessage(`Server Error: ${res.status}`);
           }
       } catch (e: any) {
           setTestStatus('fail');
-          setTestMessage(`Failed: ${e.message}`);
+          setTestMessage(e.message === 'Failed to fetch' ? 'Blocked / Offline / CORS' : e.message);
       }
   };
 
   const saveConfig = () => {
       let url = configUrl.trim().replace(/\/$/, '');
-      // Strict https enforcement for netlify
-      if (!url.startsWith('http')) {
-          url = `https://${url}`;
-      }
+      if (!url.startsWith('http')) url = `https://${url}`;
       
       localStorage.setItem('jarvis_backend_url', url);
-      setConfigUrl(url); // Update local state formatted
+      setConfigUrl(url); 
       setShowConfig(false);
       setErrorMessage('');
       setStatus('idle');
@@ -148,13 +163,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
   if (showConfig) {
       return (
-        <div className="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black flex items-center justify-center z-50 p-4 animate-in fade-in zoom-in duration-300">
              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-900/20 via-black to-black"></div>
-             <div className="bg-black/80 border border-cyan-500/50 p-8 rounded-xl max-w-md w-full relative backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.2)]">
+             <div className="bg-black/90 border border-cyan-500/50 p-6 md:p-8 rounded-xl max-w-md w-full relative backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.2)]">
                 <h2 className="text-xl font-bold text-cyan-400 mb-6 uppercase tracking-widest flex items-center gap-2">
                     <Server size={20} />
                     Network Config
                 </h2>
+                
+                {isMixedContent && (
+                    <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-600/50 rounded flex items-start gap-2 text-yellow-500 text-xs">
+                        <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                        <div>
+                            <strong>Security Warning:</strong> You are using HTTPS but trying to connect to an HTTP server. This will be blocked. Change your backend to HTTPS or use Localhost.
+                        </div>
+                    </div>
+                )}
                 
                 <div className="space-y-4">
                     <div>
@@ -167,7 +191,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                             className="w-full bg-black/50 border border-cyan-900 rounded p-3 text-cyan-100 font-mono text-xs focus:border-cyan-400 focus:outline-none"
                         />
                         <p className="text-[10px] text-cyan-800 mt-2">
-                            Enter the full URL of your Render backend.
+                            Enter the full URL of your Render backend (starting with https://).
                         </p>
                     </div>
 
@@ -290,21 +314,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             </div>
 
             {(status === 'denied' || status === 'error') && (
-                <div className="flex flex-col gap-2">
-                    <div className="text-red-500 text-xs font-mono text-center bg-red-950/20 border border-red-900/50 p-2 rounded animate-pulse flex items-center justify-center gap-2">
+                <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="text-red-500 text-xs font-mono text-center bg-red-950/20 border border-red-900/50 p-2 rounded flex items-center justify-center gap-2">
                         {errorMessage.includes('Waking') && <Loader2 size={12} className="animate-spin" />}
-                        {errorMessage}
+                        <span className="break-words">{errorMessage}</span>
                     </div>
-                    {/* Manual Config Button - Shows when error occurs */}
+                    
                     <button
                         type="button"
                         onClick={() => setShowConfig(true)}
-                        className="text-[10px] text-cyan-600 hover:text-cyan-400 underline decoration-dashed underline-offset-4 text-center mt-1"
+                        className="text-[10px] text-cyan-500 hover:text-cyan-300 underline decoration-dashed underline-offset-4 text-center mt-1 flex items-center justify-center gap-1"
                     >
-                        Configure Server Link manually
+                        <Settings size={10} />
+                        Configure Server Link
                     </button>
                     {/* Display currently used URL for debugging */}
-                    <div className="text-[8px] text-gray-600 text-center font-mono">
+                    <div className="text-[8px] text-gray-600 text-center font-mono truncate px-4">
                         Target: {getBackendUrl()}
                     </div>
                 </div>
@@ -362,7 +387,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 </button>
             </div>
             
-             {/* Subtle config button always available for power users */}
              <button 
                 onClick={() => setShowConfig(true)}
                 className="absolute top-4 right-4 text-cyan-900/30 hover:text-cyan-500 transition-colors"
