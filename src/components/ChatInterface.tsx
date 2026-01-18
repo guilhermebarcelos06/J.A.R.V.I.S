@@ -6,10 +6,11 @@ import { ChatMessage } from '../types';
 interface ChatInterfaceProps {
     activeTab: 'text' | 'image';
     onTabChange: (tab: 'text' | 'image') => void;
+    userId?: string;
 }
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ activeTab, onTabChange }) => {
-  const { messages, sendMessage, generateImage, isLoading } = useChat();
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ activeTab, onTabChange, userId }) => {
+  const { messages, sendMessage, generateImage, isLoading } = useChat(userId);
   const [inputValue, setInputValue] = useState('');
   const [selectedImage, setSelectedImage] = useState<{url: string, timestamp: number} | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

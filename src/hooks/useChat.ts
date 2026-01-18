@@ -5,7 +5,7 @@ import { ChatMessage } from '../types';
 // Determine Backend URL
 const BACKEND_URL = ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
 
-export const useChat = () => {
+export const useChat = (userId?: string) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const chatSessionRef = useRef<any>(null);
@@ -30,6 +30,40 @@ export const useChat = () => {
     fetchKey();
   }, []);
 
+  // Load History when userId changes
+  useEffect(() => {
+      if (!userId) return;
+      
+      const loadHistory = async () => {
+          try {
+              const res = await fetch(`${BACKEND_URL}/api/chat/${userId}`);
+              if (res.ok) {
+                  const data = await res.json();
+                  if (data.messages) {
+                      setMessages(data.messages);
+                  }
+              }
+          } catch (e) {
+              console.error("Failed to load history", e);
+          }
+      };
+      loadHistory();
+  }, [userId]);
+
+  // Save History Function
+  const saveHistory = useCallback(async (newMessages: ChatMessage[]) => {
+      if (!userId) return;
+      try {
+          await fetch(`${BACKEND_URL}/api/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId, messages: newMessages })
+          });
+      } catch (e) {
+          console.error("Failed to save history", e);
+      }
+  }, [userId]);
+
   const initializeChat = useCallback(async () => {
     if (!chatSessionRef.current) {
         if (!fetchedApiKey) {
@@ -41,10 +75,14 @@ export const useChat = () => {
             model: 'gemini-3-flash-preview',
             config: {
                 systemInstruction: "You are Jarvis. Respond concisely, intelligently, and with a slight dry wit. You are a text-based terminal interface now.",
-            }
+            },
+            history: messages.map(m => ({
+                role: m.role,
+                parts: [{ text: m.text || '' }]
+            }))
         });
     }
-  }, [fetchedApiKey]);
+  }, [fetchedApiKey, messages]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
@@ -56,7 +94,9 @@ export const useChat = () => {
       timestamp: Date.now(),
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    saveHistory(updatedMessages);
     setIsLoading(true);
 
     try {
@@ -75,7 +115,9 @@ export const useChat = () => {
             text: responseText,
             timestamp: Date.now(),
         };
-        setMessages(prev => [...prev, aiMsg]);
+        const finalMessages = [...updatedMessages, aiMsg];
+        setMessages(finalMessages);
+        saveHistory(finalMessages);
 
     } catch (error) {
         console.error("Chat Error:", error);
@@ -89,7 +131,7 @@ export const useChat = () => {
     } finally {
         setIsLoading(false);
     }
-  }, [initializeChat, fetchedApiKey]);
+  }, [initializeChat, fetchedApiKey, messages, saveHistory]);
 
   const generateImage = useCallback(async (prompt: string) => {
       if (!prompt.trim()) return;
@@ -100,7 +142,10 @@ export const useChat = () => {
         text: `Generate image: ${prompt}`,
         timestamp: Date.now(),
       };
-      setMessages(prev => [...prev, userMsg]);
+      
+      const updatedMessages = [...messages, userMsg];
+      setMessages(updatedMessages);
+      saveHistory(updatedMessages);
       setIsLoading(true);
 
       try {
@@ -117,24 +162,27 @@ export const useChat = () => {
 
         const data = await response.json();
 
+        let aiMsg: ChatMessage;
+
         if (data.success && data.imageUrl) {
-            const aiMsg: ChatMessage = {
+            aiMsg = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
                 image: data.imageUrl,
                 text: "Visual rendering complete.",
                 timestamp: Date.now(),
             };
-            setMessages(prev => [...prev, aiMsg]);
         } else {
-             const aiMsg: ChatMessage = {
+             aiMsg = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
                 text: "Visual processors failed to render output.",
                 timestamp: Date.now(),
             };
-            setMessages(prev => [...prev, aiMsg]);
         }
+        const finalMessages = [...updatedMessages, aiMsg];
+        setMessages(finalMessages);
+        saveHistory(finalMessages);
 
       } catch (error: any) {
           console.error("Image Gen Error:", error);
@@ -148,7 +196,7 @@ export const useChat = () => {
       } finally {
           setIsLoading(false);
       }
-  }, []);
+  }, [messages, saveHistory]);
 
   return {
     messages,

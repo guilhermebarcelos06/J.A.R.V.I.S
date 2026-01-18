@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useJarvis } from './hooks/useJarvis';
 import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
@@ -8,11 +8,13 @@ import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sp
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<'voice' | 'chat'>('voice');
   const [chatMode, setChatMode] = useState<'text' | 'image'>('text');
   const [videoData, setVideoData] = useState<{id: string, title: string} | null>(null);
 
-  const handleCommand = (command: string) => {
+  // Optimization: Wrap handlers in useCallback to maintain stable references
+  const handleCommand = useCallback((command: string) => {
       console.log("Handling command:", command);
       if (command === 'voice') {
           setActiveTab('voice');
@@ -23,39 +25,45 @@ const App: React.FC = () => {
           setActiveTab('chat');
           setChatMode('image');
       }
-  };
+  }, []);
 
-  const handlePlayVideo = (videoId: string, title: string) => {
+  const handlePlayVideo = useCallback((videoId: string, title: string) => {
       setVideoData({ id: videoId, title });
-  };
+  }, []);
 
   const { connect, disconnect, connectionState, isPlaying, volume, error, analyserNode } = useJarvis({ 
       onCommand: handleCommand,
       onPlayVideo: handlePlayVideo
   });
 
-  const handleToggleConnection = () => {
+  const handleToggleConnection = useCallback(() => {
     if (connectionState === ConnectionState.CONNECTED || connectionState === ConnectionState.CONNECTING) {
       disconnect();
     } else {
       connect();
     }
+  }, [connectionState, connect, disconnect]);
+
+  const handleLogin = (id: string) => {
+      setUserId(id);
+      setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
       disconnect();
+      setUserId(undefined);
       setIsAuthenticated(false);
-  };
+  }, [disconnect]);
 
   const isConnected = connectionState === ConnectionState.CONNECTED;
 
   if (!isAuthenticated) {
-      return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+      return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
     // Main Container - Uses h-[100dvh] for mobile browser compatibility (handles address bar resizing)
-    <div className="h-[100dvh] bg-neutral-950 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black flex flex-col font-sans text-cyan-50 relative overflow-hidden animate-in fade-in duration-1000">
+    <div className="h-[100dvh] w-full bg-neutral-950 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black flex flex-col font-sans text-cyan-50 relative overflow-hidden animate-in fade-in duration-1000 touch-none">
       
       {/* Background Grid Decoration */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
@@ -79,7 +87,7 @@ const App: React.FC = () => {
                   <iframe 
                       width="100%" 
                       height="100%" 
-                      src={`https://www.youtube.com/embed/${videoData.id}?autoplay=1`}
+                      src={`https://www.youtube.com/embed/${videoData.id}?autoplay=1&playsinline=1`}
                       title="YouTube video player" 
                       frameBorder="0" 
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
@@ -213,7 +221,7 @@ const App: React.FC = () => {
 
         {activeTab === 'chat' && (
              <div className="w-full h-full flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <ChatInterface activeTab={chatMode} onTabChange={setChatMode} />
+                <ChatInterface activeTab={chatMode} onTabChange={setChatMode} userId={userId} />
              </div>
         )}
 
