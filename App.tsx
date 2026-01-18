@@ -4,7 +4,7 @@ import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
 import { ConnectionState } from './types';
-import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings, Server, Key } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [chatMode, setChatMode] = useState<'text' | 'image'>('text');
   const [videoData, setVideoData] = useState<{id: string, title: string} | null>(null);
 
+  // Optimization: Wrap handlers in useCallback to maintain stable references
   const handleCommand = useCallback((command: string) => {
       console.log("Handling command:", command);
       if (command === 'voice') {
@@ -30,8 +31,17 @@ const App: React.FC = () => {
       setVideoData({ id: videoId, title });
   }, []);
 
-  // Only enable Jarvis (API fetching) once authenticated
-  const { connect, disconnect, connectionState, isPlaying, volume, error, analyserNode } = useJarvis({ 
+  const { 
+      connect, 
+      disconnect, 
+      connectionState, 
+      isPlaying, 
+      volume, 
+      error, 
+      analyserNode,
+      isBackendConnected,
+      isApiKeyReady
+  } = useJarvis({ 
       onCommand: handleCommand,
       onPlayVideo: handlePlayVideo,
       enabled: isAuthenticated
@@ -117,8 +127,23 @@ const App: React.FC = () => {
             <p className="hidden md:block text-[10px] text-cyan-700 tracking-widest mt-1">SYSTEM ONLINE // PROTOCOL GEMINI-LIVE</p>
         </div>
 
-        {/* Tab Navigation & Logout */}
+        {/* Tab Navigation & Status & Logout */}
         <div className="flex items-center gap-2 md:gap-4">
+            
+            {/* STATUS INDICATORS */}
+            <div className="flex flex-col items-end mr-2 md:mr-4 gap-0.5">
+                 <div className={`flex items-center gap-1.5 text-[8px] md:text-[10px] font-mono tracking-wider transition-colors duration-500 ${isBackendConnected ? 'text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]' : 'text-red-500/60'}`}>
+                    <Server size={10} className={isBackendConnected ? '' : 'animate-pulse'} />
+                    <span className="hidden sm:inline">MAINFRAME</span>
+                    <span className="sm:hidden">SRV</span>
+                 </div>
+                 <div className={`flex items-center gap-1.5 text-[8px] md:text-[10px] font-mono tracking-wider transition-colors duration-500 ${isApiKeyReady ? 'text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]' : 'text-red-500/60'}`}>
+                    <Key size={10} className={isApiKeyReady ? '' : 'animate-pulse'} />
+                    <span className="hidden sm:inline">SECURE_KEY</span>
+                    <span className="sm:hidden">KEY</span>
+                 </div>
+            </div>
+
             <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-cyan-900/30">
                 <button 
                     onClick={() => setActiveTab('voice')}
@@ -136,11 +161,11 @@ const App: React.FC = () => {
                 </button>
             </div>
             
-            <div className="h-8 w-[1px] bg-cyan-900/30 mx-1"></div>
+            <div className="h-8 w-[1px] bg-cyan-900/30 mx-1 hidden sm:block"></div>
 
              <button 
                 onClick={handleResetConnection}
-                className="p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all"
+                className="hidden sm:block p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all"
                 title="Connection Settings"
             >
                 <Settings size={16} />

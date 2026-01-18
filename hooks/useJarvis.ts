@@ -71,6 +71,10 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
   const [error, setError] = useState<string | null>(null);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
   const [fetchedApiKey, setFetchedApiKey] = useState<string | null>(null);
+  
+  // Status Indicators
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [isApiKeyReady, setIsApiKeyReady] = useState(false);
 
   // Audio Contexts
   const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -112,29 +116,36 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
   useEffect(() => {
     if (!enabled) return;
 
-    const fetchKey = async (retries = 3) => {
+    const fetchKey = async (retries = 20) => {
         try {
             const res = await fetch(`${BACKEND_URL}/api/config`);
             if (res.ok) {
                 const data = await res.json();
                 if (data.apiKey) {
                     setFetchedApiKey(data.apiKey);
+                    setIsBackendConnected(true);
+                    setIsApiKeyReady(true);
                     return;
                 }
             }
             throw new Error("No key in response");
         } catch (e) {
+            setIsBackendConnected(false);
             if (retries > 0) {
-                // Silently retry or log sparingly
-                setTimeout(() => fetchKey(retries - 1), 2000);
+                // Silently retry to handle Cold Start (wait 3s)
+                setTimeout(() => fetchKey(retries - 1), 3000);
             } else {
                 // Final fallback to local environment
-                const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
+                const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+                               (import.meta as any).env?.VITE_API_KEY ||
+                               (window as any).GEMINI_API_KEY;
                 if (envKey) {
-                    console.log("Using local environment key fallback.");
+                    console.log("Jarvis: Using local environment key fallback.");
                     setFetchedApiKey(envKey);
+                    setIsApiKeyReady(true);
                 } else {
                     console.warn("Jarvis: Backend unreachable and no local key found. Voice commands may fail.");
+                    setIsApiKeyReady(false);
                 }
             }
         }
@@ -360,5 +371,15 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
     return () => { recognition.onend = null; recognition.stop(); };
   }, [connectionState, connect]);
 
-  return { connect, disconnect, connectionState, isPlaying, volume, error, analyserNode };
+  return { 
+      connect, 
+      disconnect, 
+      connectionState, 
+      isPlaying, 
+      volume, 
+      error, 
+      analyserNode,
+      isBackendConnected,
+      isApiKeyReady
+  };
 };
