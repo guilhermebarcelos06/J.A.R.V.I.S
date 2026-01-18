@@ -168,8 +168,8 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       const InputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       const OutputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       
-      // DO NOT force 16000Hz here. Let browser choose native rate to avoid glitches.
-      // We will downsample manually later.
+      // FIX: Do not force 16000Hz here. Let the browser pick the native rate (usually 44.1k/48k).
+      // We will downsample manually to 16000Hz later.
       inputAudioContextRef.current = new InputContextClass();
       outputAudioContextRef.current = new OutputContextClass({ sampleRate: 24000 });
 
@@ -188,7 +188,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       gainNode.connect(outputAudioContextRef.current.destination);
       gainNodeRef.current = gainNode;
 
-      // Get Microphone Stream (Use default settings for max compatibility)
+      // Get Microphone Stream
       const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
               echoCancellation: true,
@@ -211,7 +211,8 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           Respond in the user's language (Portuguese/English).
           Keep answers short unless asked for detail.
           Use tools for volume, tabs, or video.
-          Never disconnect unless explicitly told to 'shutdown'.`,
+          Do not disconnect automatically.`,
+          // Removed TERMINATE_TOOL from here
           tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
         },
         callbacks: {
@@ -225,13 +226,14 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             const processor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
             scriptProcessorRef.current = processor;
 
+            // Get the actual sample rate of the device
             const inputSampleRate = inputAudioContextRef.current.sampleRate;
-            console.log(`Mic Sample Rate: ${inputSampleRate}Hz. Downsampling to 16000Hz.`);
+            console.log(`Mic Rate: ${inputSampleRate}Hz. Downsampling to 16000Hz.`);
 
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               
-              // CRITICAL: Downsample to 16kHz before sending
+              // CRITICAL FIX: Downsample from Device Rate -> 16000Hz
               const downsampledData = downsampleBuffer(inputData, inputSampleRate, 16000);
               const pcmBlob = createPcmBlob(downsampledData);
               
