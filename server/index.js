@@ -30,9 +30,15 @@ if (MONGO_URI) {
         .then(() => console.log('✅ Connected to MongoDB Cloud'))
         .catch(err => {
             console.error('❌ MongoDB Connection Error:', err.message);
+            
             // Help debug by showing the masked URI (hides password)
             const maskedURI = MONGO_URI.replace(/:([^@]+)@/, ':****@');
             console.error(`Attempted to connect to: ${maskedURI}`);
+
+            // Specific hint for @ in password which breaks the URI parsing if not encoded
+            if ((MONGO_URI.match(/@/g) || []).length > 1) {
+                console.error(`\n💡 HINT: Your connection string has multiple '@' symbols. If your password contains '@', you MUST replace it with '%40'.\nExample: 'pass@word' -> 'pass%40word'`);
+            }
         });
 } else {
     console.warn('⚠️ MONGO_URI not found. Data will not be saved permanently. Set it in your environment variables.');
