@@ -172,7 +172,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       const InputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       const OutputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       
-      // FIX: Use default sample rate (usually 48000Hz or 44100Hz) to avoid hardware incompatibility
+      // Use default sample rate (usually 48000Hz or 44100Hz) to avoid hardware incompatibility
       inputAudioContextRef.current = new InputContextClass();
       outputAudioContextRef.current = new OutputContextClass({ sampleRate: 24000 });
 
@@ -213,9 +213,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           systemInstruction: `You are Jarvis. Intelligent, concise, witty.
           Respond in the user's language (Portuguese/English).
           Keep answers short unless asked for detail.
-          Use tools for volume, tabs, or video.
-          Do not disconnect automatically.`,
-          // Removed TERMINATE_TOOL to prevent accidental disconnects
+          Use tools for volume, tabs, or video.`,
           tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
         },
         callbacks: {
@@ -226,7 +224,8 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             if (!inputAudioContextRef.current || !stream) return;
             
             const source = inputAudioContextRef.current.createMediaStreamSource(stream);
-            const processor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+            // Optimized buffer size: 2048 (approx 42ms at 48kHz) to reduce latency and "drop" issues
+            const processor = inputAudioContextRef.current.createScriptProcessor(2048, 1, 1);
             scriptProcessorRef.current = processor;
 
             // Capture actual device Sample Rate
@@ -236,7 +235,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               
-              // CRITICAL FIX: Downsample from Device Rate -> 16000Hz
+              // CRITICAL: Downsample from Device Rate -> 16000Hz
               const downsampledData = downsampleBuffer(inputData, inputSampleRate, 16000);
               const pcmBlob = createPcmBlob(downsampledData);
               
@@ -321,6 +320,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             console.log("Session Closed", e);
             if (connectionStateRef.current === ConnectionState.CONNECTED) {
                  setConnectionState(ConnectionState.DISCONNECTED);
+                 setError("Session ended unexpectedly.");
                  cleanup();
             }
           },
@@ -343,6 +343,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
     if(sessionPromiseRef.current) {
         sessionPromiseRef.current.then(session => { if(session.close) session.close(); }).catch(() => {});
     }
+    setConnectionState(ConnectionState.DISCONNECTED); // Explicitly set state to avoid "Unexpected" error in onclose
     cleanup();
   }, [cleanup]);
 
