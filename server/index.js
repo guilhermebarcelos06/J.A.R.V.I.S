@@ -25,23 +25,28 @@ const API_KEY = process.env.API_KEY || "AIzaSyCEbHiixjlWq6RVBbFUEQJQFv1_mUo8spc"
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 // Connect to MongoDB
+let isDbConnected = false;
+
 if (MONGO_URI) {
     mongoose.connect(MONGO_URI)
-        .then(() => console.log('✅ Connected to MongoDB Cloud'))
+        .then(() => {
+            console.log('✅ Connected to MongoDB Cloud');
+            isDbConnected = true;
+        })
         .catch(err => {
             console.error('❌ MongoDB Connection Error:', err.message);
+            isDbConnected = false;
             
             // Help debug by showing the masked URI (hides password)
             const maskedURI = MONGO_URI.replace(/:([^@]+)@/, ':****@');
             console.error(`Attempted to connect to: ${maskedURI}`);
 
-            // Specific hint for @ in password which breaks the URI parsing if not encoded
             if ((MONGO_URI.match(/@/g) || []).length > 1) {
-                console.error(`\n💡 HINT: Your connection string has multiple '@' symbols. If your password contains '@', you MUST replace it with '%40'.\nExample: 'pass@word' -> 'pass%40word'`);
+                console.error(`\n💡 HINT: Your connection string has multiple '@' symbols. If your password contains '@', you MUST replace it with '%40'.`);
             }
         });
 } else {
-    console.warn('⚠️ MONGO_URI not found. Data will not be saved permanently. Set it in your environment variables.');
+    console.warn('⚠️ MONGO_URI not found. Running in ephemeral mode.');
 }
 
 // --- SCHEMAS ---
@@ -76,7 +81,10 @@ app.get('/api/config', (req, res) => {
 
 // AUTH: Register
 app.post('/api/register', async (req, res) => {
-    if (!MONGO_URI) return res.status(503).json({ error: 'Database not configured' });
+    // Check if DB is actually connected
+    if (!MONGO_URI || !isDbConnected || mongoose.connection.readyState !== 1) {
+        return res.status(503).json({ error: 'Database disconnected. Use admin/jarvis to login.' });
+    }
     try {
         const { username, password } = req.body;
         if (!username || !password) return res.status(400).json({ error: 'Missing credentials' });
@@ -98,12 +106,14 @@ app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        // Hardcoded fallback if DB is down/not set
-        if (!MONGO_URI) {
+        // Fallback to Local Mode if DB is down or not configured
+        // This ensures you can always log in as Admin even if Mongo fails
+        if (!MONGO_URI || !isDbConnected || mongoose.connection.readyState !== 1) {
+            console.warn('⚠️ Login attempted in Offline/Emergency Mode');
             if (username.toLowerCase() === 'admin' && password.toLowerCase() === 'jarvis') {
                 return res.json({ success: true, userId: 'local-admin', username: 'Admin' });
             }
-            return res.status(401).json({ error: 'Invalid credentials (Local Mode)' });
+            return res.status(401).json({ error: 'DB Error. Use admin/jarvis to login.' });
         }
 
         const user = await User.findOne({ username, password });
@@ -113,13 +123,17 @@ app.post('/api/login', async (req, res) => {
             res.status(401).json({ error: 'Invalid credentials' });
         }
     } catch (error) {
+        // Final safety net for login
+        if (req.body.username?.toLowerCase() === 'admin' && req.body.password?.toLowerCase() === 'jarvis') {
+             return res.json({ success: true, userId: 'local-admin', username: 'Admin' });
+        }
         res.status(500).json({ error: error.message });
     }
 });
 
 // CHAT: Get History
 app.get('/api/chat/:userId', async (req, res) => {
-    if (!MONGO_URI) return res.json({ messages: [] });
+    if (!MONGO_URI || !isDbConnected) return res.json({ messages: [] });
     try {
         const chat = await Chat.findOne({ userId: req.params.userId });
         res.json({ messages: chat ? chat.messages : [] });
@@ -130,9 +144,12 @@ app.get('/api/chat/:userId', async (req, res) => {
 
 // CHAT: Save History
 app.post('/api/chat', async (req, res) => {
-    if (!MONGO_URI) return res.json({ success: true }); // Mock success
+    if (!MONGO_URI || !isDbConnected) return res.json({ success: true }); // Mock success
     try {
         const { userId, messages } = req.body;
+        // Don't save for local admin
+        if (userId === 'local-admin') return res.json({ success: true });
+
         await Chat.findOneAndUpdate(
             { userId },
             { messages, updatedAt: Date.now() },
