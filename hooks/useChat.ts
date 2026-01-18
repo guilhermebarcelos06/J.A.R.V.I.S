@@ -47,7 +47,7 @@ export const useChat = (userId?: string) => {
 
   // Load History when userId changes
   useEffect(() => {
-      if (!userId) return;
+      if (!userId || userId === 'local-admin') return;
       
       const loadHistory = async () => {
           try {
@@ -67,7 +67,7 @@ export const useChat = (userId?: string) => {
 
   // Save History Function
   const saveHistory = useCallback(async (newMessages: ChatMessage[]) => {
-      if (!userId) return;
+      if (!userId || userId === 'local-admin') return;
       try {
           await fetch(`${BACKEND_URL}/api/chat`, {
               method: 'POST',
@@ -139,7 +139,7 @@ export const useChat = (userId?: string) => {
         const errorMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: 'model',
-            text: "Error: Unable to reach Jarvis Mainframe (Backend).",
+            text: "Error: Unable to reach Jarvis Mainframe. Please check your internet connection or API Key configuration.",
             timestamp: Date.now(),
         };
         setMessages(prev => [...prev, errorMsg]);
@@ -166,31 +166,36 @@ export const useChat = (userId?: string) => {
       try {
         let imageUrl: string | undefined;
 
+        // 1. Try Backend
         try {
-            // Try backend first
             const response = await fetch(`${BACKEND_URL}/api/generate-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt })
             });
-            if (!response.ok) throw new Error("Backend failed");
-            const data = await response.json();
-            if (data.success && data.imageUrl) {
-                imageUrl = data.imageUrl;
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.imageUrl) {
+                    imageUrl = data.imageUrl;
+                }
+            } else {
+                throw new Error("Backend unavailable");
             }
         } catch (backendError) {
-            console.warn("Backend unavailable for image gen, attempting client-side generation...", backendError);
-            
-            // Client-side Fallback
-            if (!fetchedApiKey) throw new Error("API Key missing for fallback");
-            const ai = new GoogleGenAI({ apiKey: fetchedApiKey });
-            
-            const response = await ai.models.generateContent({
+            console.warn("Backend failed for image, trying client-side fallback...");
+        }
+
+        // 2. Client-side Fallback
+        if (!imageUrl) {
+             if (!fetchedApiKey) throw new Error("API Key missing. Cannot generate image without backend or local key.");
+             
+             const ai = new GoogleGenAI({ apiKey: fetchedApiKey });
+             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash-image',
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     imageConfig: { aspectRatio: "1:1" },
-                    // Safety settings for direct client call
                     safetySettings: [
                         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
                         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -207,6 +212,7 @@ export const useChat = (userId?: string) => {
         }
 
         let aiMsg: ChatMessage;
+
         if (imageUrl) {
             aiMsg = {
                 id: (Date.now() + 1).toString(),
