@@ -26,7 +26,8 @@ if (MONGO_URI) {
     MONGO_URI = MONGO_URI.trim().replace(/^["']|["']$/g, '');
 }
 
-const API_KEY = process.env.API_KEY || "AIzaSyCEbHiixjlWq6RVBbFUEQJQFv1_mUo8spc";
+const API_KEY = process.env.API_KEY;
+// Note: If API_KEY is missing, the SDK will throw an error upon initialization or usage.
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 // Connect to MongoDB
@@ -77,6 +78,28 @@ app.get('/', (req, res) => {
         message: 'Jarvis Backend Operational',
         service: 'render'
     });
+});
+
+// VERIFY: Test API Key validity
+app.get('/api/verify', async (req, res) => {
+    try {
+        if (!API_KEY) {
+            return res.status(500).json({ success: false, error: 'Server API_KEY not configured' });
+        }
+        // Simple text generation to validate key
+        await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: { parts: [{ text: 'ping' }] }
+        });
+        res.json({ success: true, message: 'Gemini API Key Verified' });
+    } catch (error) {
+        console.error("Verification failed:", error);
+        // Check for specific API key errors
+        if (error.message?.includes('API key') || error.status === 403 || error.status === 400) {
+            return res.status(401).json({ success: false, error: 'Invalid API Key' });
+        }
+        res.status(500).json({ success: false, error: 'Gemini Unreachable' });
+    }
 });
 
 app.get('/api/config', (req, res) => {

@@ -25,13 +25,21 @@ export const useChat = (userId?: string) => {
             const res = await fetch(`${BACKEND_URL}/api/config`);
             if (res.ok) {
                 const data = await res.json();
-                if (data.apiKey) setFetchedApiKey(data.apiKey);
+                if (data.apiKey) {
+                     setFetchedApiKey(data.apiKey);
+                     return;
+                }
             }
+            throw new Error("Failed to fetch key from backend");
         } catch (e) {
-            console.warn("Backend unavailable for chat config");
-             // Fallback
-             const envKey = process.env.API_KEY || (window as any).GEMINI_API_KEY;
-             if (envKey) setFetchedApiKey(envKey);
+             // Fallback to client-side env var if backend fails
+             const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
+             if (envKey) {
+                 console.log("Chat: Using local fallback key");
+                 setFetchedApiKey(envKey);
+             } else {
+                 console.warn("Chat: Backend unavailable and no local key found");
+             }
         }
     };
     fetchKey();
@@ -171,7 +179,7 @@ export const useChat = (userId?: string) => {
                 imageUrl = data.imageUrl;
             }
         } catch (backendError) {
-            console.warn("Backend unavailable, attempting client-side generation...", backendError);
+            console.warn("Backend unavailable for image gen, attempting client-side generation...", backendError);
             
             // Client-side Fallback
             if (!fetchedApiKey) throw new Error("API Key missing for fallback");

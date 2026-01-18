@@ -61,9 +61,10 @@ const PLAY_VIDEO_TOOL: FunctionDeclaration = {
 interface UseJarvisProps {
     onCommand?: (command: string) => void;
     onPlayVideo?: (videoId: string, title: string) => void;
+    enabled?: boolean;
 }
 
-export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
+export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisProps = {}) => {
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5); 
@@ -109,6 +110,8 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
 
   // Fetch API Key
   useEffect(() => {
+    if (!enabled) return;
+
     const fetchKey = async (retries = 3) => {
         try {
             const res = await fetch(`${BACKEND_URL}/api/config`);
@@ -119,17 +122,25 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
                     return;
                 }
             }
+            throw new Error("No key in response");
         } catch (e) {
-            console.warn(`Backend check failed. Retries left: ${retries}`);
-            if (retries > 0) setTimeout(() => fetchKey(retries - 1), 2000);
-            else {
-                const envKey = process.env.API_KEY || (window as any).GEMINI_API_KEY;
-                if (envKey) setFetchedApiKey(envKey);
+            if (retries > 0) {
+                console.log(`Backend check attempt failed. Retrying... (${retries})`);
+                setTimeout(() => fetchKey(retries - 1), 2000);
+            } else {
+                // Final fallback
+                const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
+                if (envKey) {
+                    console.log("Using local environment key fallback.");
+                    setFetchedApiKey(envKey);
+                } else {
+                    console.warn("Backend unreachable and no local key found.");
+                }
             }
         }
     };
     fetchKey();
-  }, []);
+  }, [enabled]);
 
   const cleanup = useCallback(() => {
     if (mediaStreamRef.current) {
@@ -141,15 +152,11 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       scriptProcessorRef.current = null;
     }
     if (inputAudioContextRef.current) {
-      if (inputAudioContextRef.current.state !== 'closed') {
-         inputAudioContextRef.current.close();
-      }
+      inputAudioContextRef.current.close();
       inputAudioContextRef.current = null;
     }
     if (outputAudioContextRef.current) {
-      if (outputAudioContextRef.current.state !== 'closed') {
-         outputAudioContextRef.current.close();
-      }
+      outputAudioContextRef.current.close();
       outputAudioContextRef.current = null;
     }
     sourcesRef.current.forEach(source => source.stop());
@@ -172,7 +179,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       const InputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       const OutputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       
-      // Use default sample rate (usually 48000Hz or 44100Hz) to avoid hardware incompatibility
+      // Let browser pick native sample rate (usually 44.1k or 48k)
       inputAudioContextRef.current = new InputContextClass();
       outputAudioContextRef.current = new OutputContextClass({ sampleRate: 24000 });
 
@@ -213,7 +220,8 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           systemInstruction: `You are Jarvis. Intelligent, concise, witty.
           Respond in the user's language (Portuguese/English).
           Keep answers short unless asked for detail.
-          Use tools for volume, tabs, or video.`,
+          Use tools for volume, tabs, or video.
+          Do not disconnect automatically.`,
           tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
         },
         callbacks: {
@@ -224,18 +232,17 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             if (!inputAudioContextRef.current || !stream) return;
             
             const source = inputAudioContextRef.current.createMediaStreamSource(stream);
-            // Optimized buffer size: 2048 (approx 42ms at 48kHz) to reduce latency and "drop" issues
-            const processor = inputAudioContextRef.current.createScriptProcessor(2048, 1, 1);
+            const processor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
             scriptProcessorRef.current = processor;
 
-            // Capture actual device Sample Rate
+            // Get the actual sample rate of the device
             const inputSampleRate = inputAudioContextRef.current.sampleRate;
             console.log(`Mic Rate: ${inputSampleRate}Hz. Downsampling to 16000Hz.`);
 
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               
-              // CRITICAL: Downsample from Device Rate -> 16000Hz
+              // CRITICAL FIX: Downsample from Device Rate -> 16000Hz
               const downsampledData = downsampleBuffer(inputData, inputSampleRate, 16000);
               const pcmBlob = createPcmBlob(downsampledData);
               
@@ -320,7 +327,6 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             console.log("Session Closed", e);
             if (connectionStateRef.current === ConnectionState.CONNECTED) {
                  setConnectionState(ConnectionState.DISCONNECTED);
-                 setError("Session ended unexpectedly.");
                  cleanup();
             }
           },
@@ -343,7 +349,6 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
     if(sessionPromiseRef.current) {
         sessionPromiseRef.current.then(session => { if(session.close) session.close(); }).catch(() => {});
     }
-    setConnectionState(ConnectionState.DISCONNECTED); // Explicitly set state to avoid "Unexpected" error in onclose
     cleanup();
   }, [cleanup]);
 

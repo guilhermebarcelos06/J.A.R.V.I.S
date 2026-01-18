@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight } from 'lucide-react';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (userId: string) => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
@@ -37,7 +37,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       // Hardcoded credentials for demo
       if (username.toLowerCase() === 'admin' && password.toLowerCase() === 'jarvis') {
         setStatus('granted');
-        setTimeout(onLogin, 1500);
+        setTimeout(() => onLogin('local-admin'), 1500);
       } else {
         setStatus('denied');
         setTimeout(() => setStatus('idle'), 2000);

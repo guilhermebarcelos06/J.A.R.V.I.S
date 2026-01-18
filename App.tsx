@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useJarvis } from './hooks/useJarvis';
 import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
 import { ConnectionState } from './types';
-import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<'voice' | 'chat'>('voice');
   const [chatMode, setChatMode] = useState<'text' | 'image'>('text');
   const [videoData, setVideoData] = useState<{id: string, title: string} | null>(null);
 
-  const handleCommand = (command: string) => {
+  const handleCommand = useCallback((command: string) => {
       console.log("Handling command:", command);
       if (command === 'voice') {
           setActiveTab('voice');
@@ -23,39 +24,54 @@ const App: React.FC = () => {
           setActiveTab('chat');
           setChatMode('image');
       }
-  };
+  }, []);
 
-  const handlePlayVideo = (videoId: string, title: string) => {
+  const handlePlayVideo = useCallback((videoId: string, title: string) => {
       setVideoData({ id: videoId, title });
-  };
+  }, []);
 
+  // Only enable Jarvis (API fetching) once authenticated
   const { connect, disconnect, connectionState, isPlaying, volume, error, analyserNode } = useJarvis({ 
       onCommand: handleCommand,
-      onPlayVideo: handlePlayVideo
+      onPlayVideo: handlePlayVideo,
+      enabled: isAuthenticated
   });
 
-  const handleToggleConnection = () => {
+  const handleToggleConnection = useCallback(() => {
     if (connectionState === ConnectionState.CONNECTED || connectionState === ConnectionState.CONNECTING) {
       disconnect();
     } else {
       connect();
     }
+  }, [connectionState, connect, disconnect]);
+
+  const handleLogin = (id: string) => {
+      setUserId(id);
+      setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
       disconnect();
+      setUserId(undefined);
       setIsAuthenticated(false);
-  };
+  }, [disconnect]);
+
+  const handleResetConnection = useCallback(() => {
+      if (window.confirm("Reset server connection settings? This will reload the application.")) {
+          localStorage.removeItem('jarvis_backend_url');
+          window.location.reload();
+      }
+  }, []);
 
   const isConnected = connectionState === ConnectionState.CONNECTED;
 
   if (!isAuthenticated) {
-      return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+      return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
     // Main Container - Uses h-[100dvh] for mobile browser compatibility (handles address bar resizing)
-    <div className="h-[100dvh] bg-neutral-950 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black flex flex-col font-sans text-cyan-50 relative overflow-hidden animate-in fade-in duration-1000">
+    <div className="h-[100dvh] w-full bg-neutral-950 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black flex flex-col font-sans text-cyan-50 relative overflow-hidden animate-in fade-in duration-1000 touch-none">
       
       {/* Background Grid Decoration */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
@@ -79,7 +95,7 @@ const App: React.FC = () => {
                   <iframe 
                       width="100%" 
                       height="100%" 
-                      src={`https://www.youtube.com/embed/${videoData.id}?autoplay=1`}
+                      src={`https://www.youtube.com/embed/${videoData.id}?autoplay=1&playsinline=1`}
                       title="YouTube video player" 
                       frameBorder="0" 
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
@@ -119,6 +135,16 @@ const App: React.FC = () => {
                     <span className="hidden md:inline">Terminal</span>
                 </button>
             </div>
+            
+            <div className="h-8 w-[1px] bg-cyan-900/30 mx-1"></div>
+
+             <button 
+                onClick={handleResetConnection}
+                className="p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all"
+                title="Connection Settings"
+            >
+                <Settings size={16} />
+            </button>
 
             <button 
                 onClick={handleLogout}
@@ -142,9 +168,18 @@ const App: React.FC = () => {
             {/* Status Text */}
             <div className="h-16 flex flex-col items-center justify-center gap-2">
               {error ? (
-                <div className="flex items-center gap-2 text-red-500 bg-red-950/30 px-4 py-2 rounded-full border border-red-900/50 backdrop-blur-sm max-w-[90vw] text-center">
-                  <AlertCircle size={16} className="shrink-0" />
-                  <span className="text-xs md:text-sm font-mono truncate">{error}</span>
+                <div className="flex flex-col items-center gap-2 animate-pulse">
+                    <div className="flex items-center gap-2 text-red-500 bg-red-950/30 px-4 py-2 rounded-full border border-red-900/50 backdrop-blur-sm max-w-[90vw] text-center">
+                      <AlertCircle size={16} className="shrink-0" />
+                      <span className="text-xs md:text-sm font-mono truncate">{error}</span>
+                    </div>
+                    {/* Suggest checking settings if error persists */}
+                    <button 
+                        onClick={handleResetConnection}
+                        className="text-[10px] text-cyan-700 hover:text-cyan-400 underline decoration-dashed underline-offset-4"
+                    >
+                        Check Connection Settings
+                    </button>
                 </div>
               ) : (
                 <>
@@ -213,7 +248,7 @@ const App: React.FC = () => {
 
         {activeTab === 'chat' && (
              <div className="w-full h-full flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <ChatInterface activeTab={chatMode} onTabChange={setChatMode} />
+                <ChatInterface activeTab={chatMode} onTabChange={setChatMode} userId={userId} />
              </div>
         )}
 

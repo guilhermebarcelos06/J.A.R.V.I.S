@@ -128,24 +128,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
   const testConnection = async () => {
       setTestStatus('testing');
-      setTestMessage('Pinging server...');
+      setTestMessage('Verifying Uplink & API Key...');
       
       let url = configUrl.trim().replace(/\/$/, '');
       if (!url.startsWith('http')) url = `https://${url}`;
 
       try {
-          const res = await fetch(`${url}/`, { method: 'GET' });
-          if (res.ok) {
-              const data = await res.json().catch(() => ({}));
+          // Check if server is online AND if API Key is valid via /api/verify
+          const res = await fetch(`${url}/api/verify`, { method: 'GET' });
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data.success) {
               setTestStatus('success');
-              setTestMessage(data.message || 'Signal Established: Online');
+              setTestMessage(data.message || 'System Online: API Key Valid');
           } else {
               setTestStatus('fail');
-              setTestMessage(`Server Error: ${res.status}`);
+              setTestMessage(data.error || `Error: ${res.status} (Check Key)`);
           }
       } catch (e: any) {
           setTestStatus('fail');
-          setTestMessage(e.message === 'Failed to fetch' ? 'Blocked / Offline / CORS' : e.message);
+          setTestMessage(e.message === 'Failed to fetch' ? 'Network Error / Offline' : e.message);
       }
   };
 
@@ -168,7 +170,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
              <div className="bg-black/90 border border-cyan-500/50 p-6 md:p-8 rounded-xl max-w-md w-full relative backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.2)]">
                 <h2 className="text-xl font-bold text-cyan-400 mb-6 uppercase tracking-widest flex items-center gap-2">
                     <Server size={20} />
-                    Network Config
+                    System Configuration
                 </h2>
                 
                 {isMixedContent && (
@@ -214,7 +216,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                             className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs uppercase font-mono rounded flex items-center justify-center gap-2"
                         >
                             <Wifi size={14} />
-                            Test Signal
+                            Test Signal & Key
                         </button>
                     </div>
 
