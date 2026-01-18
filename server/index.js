@@ -10,8 +10,13 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001; 
 
-// Allow CORS
-app.use(cors({ origin: '*' }));
+// Allow CORS - Explicit Configuration
+app.use(cors({ 
+    origin: '*', 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+}));
+
 app.use(express.json({ limit: '10mb' }));
 
 // --- DATABASE CONFIGURATION ---

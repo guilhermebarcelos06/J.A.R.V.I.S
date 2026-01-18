@@ -3,8 +3,15 @@ import { GoogleGenAI, LiveServerMessage, Modality, FunctionDeclaration, Type } f
 import { ConnectionState } from '../types';
 import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audioUtils';
 
-// Determine Backend URL: Use Cloud URL if set, otherwise fallback to localhost
-const BACKEND_URL = ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+// Determine Backend URL: Check LocalStorage first, then Env, then localhost fallback
+const getBackendUrl = () => {
+    if (typeof window !== 'undefined') {
+        const local = localStorage.getItem('jarvis_backend_url');
+        if (local) return local.replace(/\/$/, '');
+    }
+    return ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+};
+const BACKEND_URL = getBackendUrl();
 
 const TERMINATE_TOOL: FunctionDeclaration = {
   name: "terminateSession",
@@ -164,7 +171,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
   const connect = useCallback(async () => {
     try {
       if (!fetchedApiKey) {
-          setError(`Server offline at ${BACKEND_URL}. Check your connection.`);
+          setError(`Server offline at ${BACKEND_URL}. Check configuration.`);
           return;
       }
 

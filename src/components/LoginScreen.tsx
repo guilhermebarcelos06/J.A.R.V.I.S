@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft } from 'lucide-react';
+import { Lock, Unlock, Scan, ShieldCheck, ShieldAlert, Fingerprint, ChevronRight, UserPlus, ArrowLeft, Settings, Server } from 'lucide-react';
 
-// Determine Backend URL
-const BACKEND_URL = ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+// Dynamic Backend URL resolution with LocalStorage override
+const getBackendUrl = () => {
+    if (typeof window !== 'undefined') {
+        const local = localStorage.getItem('jarvis_backend_url');
+        if (local) return local.replace(/\/$/, '');
+    }
+    return ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+};
 
 interface LoginScreenProps {
   onLogin: (userId: string) => void;
@@ -15,6 +21,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [scanProgress, setScanProgress] = useState(0);
+
+  // Config Modal State
+  const [showConfig, setShowConfig] = useState(false);
+  const [configUrl, setConfigUrl] = useState(getBackendUrl());
 
   useEffect(() => {
     let interval: number;
@@ -44,11 +54,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         // Artificial delay for effect
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+        const backend = getBackendUrl();
+        console.log("Attempting connection to:", backend);
+
+        const res = await fetch(`${backend}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
+
+        // Handle non-JSON responses (often server errors or 404s HTML)
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error(`Invalid Server Response: ${res.status} ${res.statusText}`);
+        }
 
         const data = await res.json();
 
@@ -60,13 +79,70 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             setErrorMessage(data.error || 'Access Denied');
             setTimeout(() => setStatus('idle'), 2000);
         }
-    } catch (err) {
+    } catch (err: any) {
         console.error(err);
         setStatus('error');
         setErrorMessage('Cannot reach Mainframe');
-        setTimeout(() => setStatus('idle'), 2000);
+        // Stay in error state so user can see the config button
     }
   };
+
+  const saveConfig = () => {
+      let url = configUrl.trim().replace(/\/$/, '');
+      if (!url.startsWith('http')) {
+          url = `https://${url}`;
+      }
+      localStorage.setItem('jarvis_backend_url', url);
+      setShowConfig(false);
+      setErrorMessage('');
+      setStatus('idle');
+      window.location.reload(); // Reload to ensure all hooks pick up the new URL
+  };
+
+  if (showConfig) {
+      return (
+        <div className="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
+             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-900/20 via-black to-black"></div>
+             <div className="bg-black/80 border border-cyan-500/50 p-8 rounded-xl max-w-md w-full relative backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.2)]">
+                <h2 className="text-xl font-bold text-cyan-400 mb-6 uppercase tracking-widest flex items-center gap-2">
+                    <Server size={20} />
+                    Network Config
+                </h2>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs text-cyan-700 uppercase font-mono mb-2 block">Mainframe URL (Backend)</label>
+                        <input 
+                            type="text" 
+                            value={configUrl}
+                            onChange={(e) => setConfigUrl(e.target.value)}
+                            placeholder="https://jarvis-backend.onrender.com"
+                            className="w-full bg-black/50 border border-cyan-900 rounded p-3 text-cyan-100 font-mono text-xs focus:border-cyan-400 focus:outline-none"
+                        />
+                        <p className="text-[10px] text-cyan-800 mt-2">
+                            Enter the full URL of your Render backend. Do not include a trailing slash.
+                        </p>
+                    </div>
+
+                    <div className="flex gap-3 mt-6">
+                        <button 
+                            onClick={() => setShowConfig(false)}
+                            className="flex-1 py-3 border border-red-900/50 text-red-500 rounded hover:bg-red-900/20 font-mono text-xs uppercase"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={saveConfig}
+                            className="flex-1 py-3 bg-cyan-900/30 border border-cyan-500 text-cyan-400 rounded hover:bg-cyan-500/20 font-mono text-xs uppercase"
+                        >
+                            Save & Reboot
+                        </button>
+                    </div>
+                </div>
+             </div>
+        </div>
+      );
+  }
 
   return (
     <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden z-50">
@@ -120,7 +196,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  disabled={status !== 'idle' && status !== 'denied' && status !== 'error'}
+                  disabled={status === 'scanning' || status === 'granted'}
                   className="w-full bg-black/50 border border-cyan-900/50 rounded p-3 pl-10 text-cyan-100 placeholder-cyan-900/50 focus:outline-none focus:border-cyan-500/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.1)] transition-all font-mono text-sm tracking-wider"
                   placeholder="USERNAME"
                 />
@@ -135,7 +211,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={status !== 'idle' && status !== 'denied' && status !== 'error'}
+                  disabled={status === 'scanning' || status === 'granted'}
                   className="w-full bg-black/50 border border-cyan-900/50 rounded p-3 pl-10 text-cyan-100 placeholder-cyan-900/50 focus:outline-none focus:border-cyan-500/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.1)] transition-all font-mono text-sm tracking-wider"
                   placeholder="••••••••"
                 />
@@ -144,14 +220,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             </div>
 
             {(status === 'denied' || status === 'error') && (
-                <div className="text-red-500 text-xs font-mono text-center bg-red-950/20 border border-red-900/50 p-2 rounded animate-pulse">
-                    ERROR: {errorMessage}
+                <div className="flex flex-col gap-2">
+                    <div className="text-red-500 text-xs font-mono text-center bg-red-950/20 border border-red-900/50 p-2 rounded animate-pulse">
+                        ERROR: {errorMessage}
+                    </div>
+                    {/* Manual Config Button - Shows when error occurs */}
+                    <button
+                        type="button"
+                        onClick={() => setShowConfig(true)}
+                        className="text-[10px] text-cyan-600 hover:text-cyan-400 underline decoration-dashed underline-offset-4 text-center mt-1"
+                    >
+                        Configure Server Link manually
+                    </button>
                 </div>
             )}
 
             <button
               type="submit"
-              disabled={status !== 'idle' && status !== 'denied' && status !== 'error'}
+              disabled={status === 'scanning' || status === 'granted'}
               className={`w-full py-3 rounded font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 border
                 ${status === 'granted' 
                     ? 'bg-green-500/20 border-green-500 text-green-400' 
@@ -192,6 +278,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                     )}
                 </button>
             </div>
+            
+             {/* Subtle config button always available for power users */}
+             <button 
+                onClick={() => setShowConfig(true)}
+                className="absolute top-4 right-4 text-cyan-900/30 hover:text-cyan-500 transition-colors"
+                title="System Configuration"
+             >
+                 <Settings size={14} />
+             </button>
 
           {/* Decorative tech lines */}
           <div className="absolute bottom-4 right-4 flex gap-1">

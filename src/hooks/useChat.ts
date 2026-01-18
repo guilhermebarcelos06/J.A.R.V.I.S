@@ -2,8 +2,15 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
 import { ChatMessage } from '../types';
 
-// Determine Backend URL
-const BACKEND_URL = ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+// Determine Backend URL: Check LocalStorage first, then Env
+const getBackendUrl = () => {
+    if (typeof window !== 'undefined') {
+        const local = localStorage.getItem('jarvis_backend_url');
+        if (local) return local.replace(/\/$/, '');
+    }
+    return ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+};
+const BACKEND_URL = getBackendUrl();
 
 export const useChat = (userId?: string) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
