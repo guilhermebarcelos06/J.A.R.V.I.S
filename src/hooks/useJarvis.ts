@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, FunctionDeclaration, Type } from '@google/genai';
 import { ConnectionState } from '../types';
-import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audioUtils';
+import { createPcmBlob, decodeAudioData, base64ToUint8Array, downsampleBuffer } from '../utils/audioUtils';
 
-// Determine Backend URL: Check LocalStorage first, then Env, then localhost fallback
+// Determine Backend URL
 const getBackendUrl = () => {
     if (typeof window !== 'undefined') {
         const local = localStorage.getItem('jarvis_backend_url');
@@ -12,8 +12,6 @@ const getBackendUrl = () => {
     return ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
 };
 const BACKEND_URL = getBackendUrl();
-
-// Removed TERMINATE_TOOL to prevent accidental trigger by background noise
 
 const SET_VOLUME_TOOL: FunctionDeclaration = {
   name: "setVolume",
@@ -32,13 +30,12 @@ const SET_VOLUME_TOOL: FunctionDeclaration = {
 
 const SWITCH_TAB_TOOL: FunctionDeclaration = {
   name: "switchTab",
-  description: "Switches the application interface tab. Use this when the user asks to see the chat, terminal, images, or image generator.",
+  description: "Switches the application interface tab.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       tab: {
         type: Type.STRING,
-        description: "The tab to switch to. Options: 'voice' (for main interface), 'chat' (for text terminal), 'image' (for image generation).",
         enum: ['voice', 'chat', 'image']
       },
     },
@@ -48,13 +45,13 @@ const SWITCH_TAB_TOOL: FunctionDeclaration = {
 
 const PLAY_VIDEO_TOOL: FunctionDeclaration = {
   name: "playVideo",
-  description: "Searches and plays a video from YouTube. Use this when the user asks to play a song, watch a video, or see something.",
+  description: "Searches and plays a video from YouTube.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       query: {
         type: Type.STRING,
-        description: "The search query for the video (e.g. 'Bohemian Rhapsody', 'lofi beats', 'funny cats').",
+        description: "The search query for the video.",
       },
     },
     required: ["query"],
@@ -69,7 +66,7 @@ interface UseJarvisProps {
 export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.5); // Default 50%
+  const [volume, setVolume] = useState(0.5); 
   const [error, setError] = useState<string | null>(null);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
   const [fetchedApiKey, setFetchedApiKey] = useState<string | null>(null);
@@ -86,7 +83,6 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
-  // Helper refs to access state in callbacks
   const connectionStateRef = useRef(connectionState);
   const volumeRef = useRef(volume);
   const onCommandRef = useRef(onCommand);
@@ -106,17 +102,15 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
 
   useEffect(() => {
     volumeRef.current = volume;
-    // Update active gain node if it exists
     if (gainNodeRef.current) {
         gainNodeRef.current.gain.setTargetAtTime(volume, outputAudioContextRef.current?.currentTime || 0, 0.1);
     }
   }, [volume]);
 
-  // Fetch API Key from Backend on mount (with retry for cold starts)
+  // Fetch API Key
   useEffect(() => {
     const fetchKey = async (retries = 3) => {
         try {
-            // Use dynamic backend URL
             const res = await fetch(`${BACKEND_URL}/api/config`);
             if (res.ok) {
                 const data = await res.json();
@@ -126,17 +120,14 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
                 }
             }
         } catch (e) {
-            console.warn(`Backend check failed at ${BACKEND_URL}. Retries left: ${retries}`);
-            if (retries > 0) {
-                setTimeout(() => fetchKey(retries - 1), 2000);
-            } else {
-                // Fallback for development if backend isn't running but env var exists
+            console.warn(`Backend check failed. Retries left: ${retries}`);
+            if (retries > 0) setTimeout(() => fetchKey(retries - 1), 2000);
+            else {
                 const envKey = process.env.API_KEY || (window as any).GEMINI_API_KEY;
                 if (envKey) setFetchedApiKey(envKey);
             }
         }
     };
-
     fetchKey();
   }, []);
 
@@ -167,58 +158,48 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
   const connect = useCallback(async () => {
     try {
       if (!fetchedApiKey) {
-          setError(`Server offline at ${BACKEND_URL}. Check configuration.`);
+          setError(`System Offline. Backend unreachable.`);
           return;
       }
 
       setError(null);
       setConnectionState(ConnectionState.CONNECTING);
 
-      // Initialize Audio Contexts
       const InputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       const OutputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       
-      // Attempt to enforce 16kHz for input. If browser fails, we might need fallback, but most support it.
-      inputAudioContextRef.current = new InputContextClass({ sampleRate: 16000 });
+      // DO NOT force 16000Hz here. Let browser choose native rate to avoid glitches.
+      // We will downsample manually later.
+      inputAudioContextRef.current = new InputContextClass();
       outputAudioContextRef.current = new OutputContextClass({ sampleRate: 24000 });
 
-      // CRITICAL: Ensure contexts are running (they start suspended in some browsers without user gesture)
-      if (inputAudioContextRef.current.state === 'suspended') {
-          await inputAudioContextRef.current.resume();
-      }
-      if (outputAudioContextRef.current.state === 'suspended') {
-          await outputAudioContextRef.current.resume();
-      }
+      // Resume Contexts immediately (browsers block autoplay)
+      await inputAudioContextRef.current.resume();
+      await outputAudioContextRef.current.resume();
       
-      // Setup Analyser Node
       const analyser = outputAudioContextRef.current.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.5;
       setAnalyserNode(analyser);
 
-      // Setup Volume Gain Node
       const gainNode = outputAudioContextRef.current.createGain();
       gainNode.gain.value = volumeRef.current;
-      
-      // Chain: Source -> Analyser -> Gain -> Destination
-      // Note: Source connects to Analyser in onmessage
       analyser.connect(gainNode);
       gainNode.connect(outputAudioContextRef.current.destination);
-      
       gainNodeRef.current = gainNode;
 
-      // Request Microphone
+      // Get Microphone Stream (Use default settings for max compatibility)
       const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
-              channelCount: 1,
-              sampleRate: 16000
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
           } 
       });
       mediaStreamRef.current = stream;
 
       const ai = new GoogleGenAI({ apiKey: fetchedApiKey });
 
-      // Establish Connection
       sessionPromiseRef.current = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
@@ -226,39 +207,41 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } },
           },
-          systemInstruction: `You are Jarvis, a sophisticated, intelligent, and highly capable AI assistant. 
-          Your voice is calm, witty, and concise. You are helpful and precise.
-          Respond in Portuguese if the user speaks Portuguese, otherwise use English.
-          If the user wants to adjust volume, use the setVolume tool. 0 is silent, 100 is max.
-          If the user asks to see the chat, terminal, images, or image generator, use the switchTab tool.
-          If the user asks to play music or a video, use the playVideo tool.
-          Do NOT terminate the session unless explicitly ordered to "Shutdown system".`,
+          systemInstruction: `You are Jarvis. Intelligent, concise, witty.
+          Respond in the user's language (Portuguese/English).
+          Keep answers short unless asked for detail.
+          Use tools for volume, tabs, or video.
+          Never disconnect unless explicitly told to 'shutdown'.`,
           tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
         },
         callbacks: {
           onopen: () => {
             setConnectionState(ConnectionState.CONNECTED);
-            console.log("Session Opened");
+            console.log("Link Established");
             
-            // Setup Input Stream
             if (!inputAudioContextRef.current || !stream) return;
             
             const source = inputAudioContextRef.current.createMediaStreamSource(stream);
-            // Reduced buffer size from 4096 to 2048 for better latency (approx 128ms @ 16kHz)
-            const processor = inputAudioContextRef.current.createScriptProcessor(2048, 1, 1);
+            const processor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
             scriptProcessorRef.current = processor;
+
+            const inputSampleRate = inputAudioContextRef.current.sampleRate;
+            console.log(`Mic Sample Rate: ${inputSampleRate}Hz. Downsampling to 16000Hz.`);
 
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
-              const pcmBlob = createPcmBlob(inputData);
+              
+              // CRITICAL: Downsample to 16kHz before sending
+              const downsampledData = downsampleBuffer(inputData, inputSampleRate, 16000);
+              const pcmBlob = createPcmBlob(downsampledData);
               
               if (sessionPromiseRef.current) {
                 sessionPromiseRef.current.then((session) => {
-                   try {
-                      session.sendRealtimeInput({ media: pcmBlob });
-                   } catch(e) {
-                      console.error("Error sending input", e);
-                   }
+                  try {
+                    session.sendRealtimeInput({ media: pcmBlob });
+                  } catch (err) {
+                    // Ignore send errors if closing
+                  }
                 });
               }
             };
@@ -269,137 +252,77 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           onmessage: async (message: LiveServerMessage) => {
             const serverContent = message.serverContent;
 
-            // Handle Tool Calls
             if (message.toolCall) {
                 for (const fc of message.toolCall.functionCalls) {
                      if (fc.name === 'setVolume') {
                         const level = (fc.args as any).level;
                         const newVolume = Math.max(0, Math.min(100, level)) / 100;
                         setVolume(newVolume);
-                        
                         if (sessionPromiseRef.current) {
-                           sessionPromiseRef.current.then(session => 
-                              session.sendToolResponse({
-                                functionResponses: {
-                                    id: fc.id,
-                                    name: fc.name,
-                                    response: { result: `Volume set to ${level}%` }
-                                }
-                              })
-                           );
+                           sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "OK" } } }));
                         }
                     } else if (fc.name === 'switchTab') {
                         const tab = (fc.args as any).tab;
-                        if (onCommandRef.current) {
-                            onCommandRef.current(tab);
-                        }
+                        if (onCommandRef.current) onCommandRef.current(tab);
                         if (sessionPromiseRef.current) {
-                           sessionPromiseRef.current.then(session => 
-                              session.sendToolResponse({
-                                functionResponses: {
-                                    id: fc.id,
-                                    name: fc.name,
-                                    response: { result: `Switched to ${tab} tab.` }
-                                }
-                              })
-                           );
+                           sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "OK" } } }));
                         }
                     } else if (fc.name === 'playVideo') {
                         const query = (fc.args as any).query;
-                        console.log("Searching video:", query);
-                        
-                        let result = "Failed to find video.";
-                        
+                        let result = "Error";
                         try {
-                            // Use dynamic backend URL
                             const res = await fetch(`${BACKEND_URL}/api/youtube-search`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ query })
+                                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query })
                             });
-                            
                             const data = await res.json();
                             if (data.success && onPlayVideoRef.current) {
                                 onPlayVideoRef.current(data.videoId, data.title);
-                                result = `Playing video: ${data.title}`;
-                            } else {
-                                result = "Could not find a matching video on YouTube.";
+                                result = "Playing";
                             }
-                        } catch (e) {
-                            console.error("Youtube tool error", e);
-                            result = "Error connecting to video service.";
-                        }
-
+                        } catch (e) { console.error(e); }
                         if (sessionPromiseRef.current) {
-                            sessionPromiseRef.current.then(session => 
-                               session.sendToolResponse({
-                                 functionResponses: {
-                                     id: fc.id,
-                                     name: fc.name,
-                                     response: { result }
-                                 }
-                               })
-                            );
-                         }
+                           sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result } } }));
+                        }
                     }
                 }
             }
             
-            // Handle Interruption
             if (serverContent?.interrupted) {
-              sourcesRef.current.forEach((src) => {
-                src.stop();
-                sourcesRef.current.delete(src);
-              });
+              sourcesRef.current.forEach((src) => { src.stop(); sourcesRef.current.delete(src); });
               nextStartTimeRef.current = 0;
               setIsPlaying(false);
               return;
             }
 
-            // Handle Audio Output
             const base64Audio = serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (base64Audio && outputAudioContextRef.current && analyser) {
                setIsPlaying(true);
-               
                const ctx = outputAudioContextRef.current;
                nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
-
-               const audioBuffer = await decodeAudioData(
-                 base64ToUint8Array(base64Audio),
-                 ctx,
-                 24000,
-                 1
-               );
-
+               const audioBuffer = await decodeAudioData(base64ToUint8Array(base64Audio), ctx, 24000, 1);
                const source = ctx.createBufferSource();
                source.buffer = audioBuffer;
-               // Connect to Analyser first
                source.connect(analyser);
-               
                source.onended = () => {
                  sourcesRef.current.delete(source);
-                 if (sourcesRef.current.size === 0) {
-                    setIsPlaying(false);
-                 }
+                 if (sourcesRef.current.size === 0) setIsPlaying(false);
                };
-
                source.start(nextStartTimeRef.current);
                nextStartTimeRef.current += audioBuffer.duration;
                sourcesRef.current.add(source);
             }
           },
           onclose: (e) => {
-            console.log("Connection closed", e);
-            setConnectionState(ConnectionState.DISCONNECTED);
-            // Don't call cleanup immediately if it's a temp drop, but here we assume close = done
-            cleanup();
+            console.log("Session Closed", e);
+            if (connectionStateRef.current === ConnectionState.CONNECTED) {
+                 // Only cleanup if we expected to stay connected
+                 setConnectionState(ConnectionState.DISCONNECTED);
+                 cleanup();
+            }
           },
           onerror: (err) => {
-            console.error("Connection error:", err);
-            // Don't show error if it's just a close event masquerading
-            if (connectionStateRef.current === ConnectionState.CONNECTED) {
-               setError("Lost connection to Jarvis Network.");
-            }
+            console.error("Session Error:", err);
+            setError("Connection disrupted.");
             cleanup();
           }
         }
@@ -407,88 +330,34 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
 
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to initialize Jarvis");
+      setError(err.message || "Initialization Failed");
       cleanup();
     }
   }, [cleanup, fetchedApiKey]);
 
   const disconnect = useCallback(() => {
     if(sessionPromiseRef.current) {
-        sessionPromiseRef.current.then(session => {
-             if(session.close) session.close();
-        }).catch(() => {});
+        sessionPromiseRef.current.then(session => { if(session.close) session.close(); }).catch(() => {});
     }
     cleanup();
   }, [cleanup]);
 
-  // Voice Command Listener for "Initialize" and offline commands
   useEffect(() => {
     if (connectionState !== ConnectionState.DISCONNECTED) return;
-    
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
     recognition.lang = 'en-US'; 
-
     recognition.onresult = (event: any) => {
       const last = event.results.length - 1;
       const command = event.results[last][0].transcript.trim().toLowerCase();
-      console.log("Voice Command Detected:", command);
-      
-      if (command.includes('initialize') || 
-          command.includes('connect') || 
-          command.includes('start jarvis') ||
-          command.includes('wake up')) {
-        connect();
-      } else if (onCommandRef.current) {
-          if (command.includes('image') || command.includes('visual')) {
-              onCommandRef.current('image');
-          } else if (command.includes('chat') || command.includes('terminal')) {
-              onCommandRef.current('chat');
-          } else if (command.includes('voice') || command.includes('home')) {
-              onCommandRef.current('voice');
-          }
-      }
+      if (command.includes('initialize') || command.includes('jarvis')) connect();
     };
-
-    recognition.onerror = (event: any) => {
-      if (event.error !== 'no-speech') {
-        console.debug("Speech recognition error:", event.error);
-      }
-    };
-    
-    recognition.onend = () => {
-        if (connectionStateRef.current === ConnectionState.DISCONNECTED) {
-            try { 
-                recognition.start(); 
-            } catch (e) {
-                // Ignore
-            }
-        }
-    };
-
-    try {
-        recognition.start();
-    } catch (e) {
-        console.debug("Speech recognition failed to start automatically:", e);
-    }
-
-    return () => {
-      recognition.onend = null;
-      recognition.stop();
-    };
+    try { recognition.start(); } catch (e) {}
+    return () => { recognition.onend = null; recognition.stop(); };
   }, [connectionState, connect]);
 
-  return {
-    connect,
-    disconnect,
-    connectionState,
-    isPlaying,
-    volume,
-    error,
-    analyserNode
-  };
+  return { connect, disconnect, connectionState, isPlaying, volume, error, analyserNode };
 };
