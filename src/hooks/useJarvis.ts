@@ -13,14 +13,7 @@ const getBackendUrl = () => {
 };
 const BACKEND_URL = getBackendUrl();
 
-const TERMINATE_TOOL: FunctionDeclaration = {
-  name: "terminateSession",
-  description: "Terminates the voice session immediately. Call this when the user says 'terminate', 'disconnect', 'shutdown', or 'stop'.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {},
-  }
-};
+// Removed TERMINATE_TOOL to prevent accidental trigger by background noise
 
 const SET_VOLUME_TOOL: FunctionDeclaration = {
   name: "setVolume",
@@ -185,8 +178,17 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       const InputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       const OutputContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       
+      // Attempt to enforce 16kHz for input. If browser fails, we might need fallback, but most support it.
       inputAudioContextRef.current = new InputContextClass({ sampleRate: 16000 });
       outputAudioContextRef.current = new OutputContextClass({ sampleRate: 24000 });
+
+      // CRITICAL: Ensure contexts are running (they start suspended in some browsers without user gesture)
+      if (inputAudioContextRef.current.state === 'suspended') {
+          await inputAudioContextRef.current.resume();
+      }
+      if (outputAudioContextRef.current.state === 'suspended') {
+          await outputAudioContextRef.current.resume();
+      }
       
       // Setup Analyser Node
       const analyser = outputAudioContextRef.current.createAnalyser();
@@ -206,7 +208,12 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
       gainNodeRef.current = gainNode;
 
       // Request Microphone
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+              channelCount: 1,
+              sampleRate: 16000
+          } 
+      });
       mediaStreamRef.current = stream;
 
       const ai = new GoogleGenAI({ apiKey: fetchedApiKey });
@@ -223,14 +230,15 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
           Your voice is calm, witty, and concise. You are helpful and precise.
           Respond in Portuguese if the user speaks Portuguese, otherwise use English.
           If the user wants to adjust volume, use the setVolume tool. 0 is silent, 100 is max.
-          If the user asks to terminate or disconnect, use the terminateSession tool immediately.
           If the user asks to see the chat, terminal, images, or image generator, use the switchTab tool.
-          If the user asks to play music or a video, use the playVideo tool.`,
-          tools: [{ functionDeclarations: [TERMINATE_TOOL, SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
+          If the user asks to play music or a video, use the playVideo tool.
+          Do NOT terminate the session unless explicitly ordered to "Shutdown system".`,
+          tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
         },
         callbacks: {
           onopen: () => {
             setConnectionState(ConnectionState.CONNECTED);
+            console.log("Session Opened");
             
             // Setup Input Stream
             if (!inputAudioContextRef.current || !stream) return;
@@ -246,7 +254,11 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
               
               if (sessionPromiseRef.current) {
                 sessionPromiseRef.current.then((session) => {
-                  session.sendRealtimeInput({ media: pcmBlob });
+                   try {
+                      session.sendRealtimeInput({ media: pcmBlob });
+                   } catch(e) {
+                      console.error("Error sending input", e);
+                   }
                 });
               }
             };
@@ -260,21 +272,7 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
             // Handle Tool Calls
             if (message.toolCall) {
                 for (const fc of message.toolCall.functionCalls) {
-                    if (fc.name === 'terminateSession') {
-                        if (sessionPromiseRef.current) {
-                           sessionPromiseRef.current.then(session => 
-                              session.sendToolResponse({
-                                functionResponses: {
-                                    id: fc.id,
-                                    name: fc.name,
-                                    response: { result: "Terminating session." }
-                                }
-                              })
-                           );
-                        }
-                        setTimeout(() => disconnect(), 500);
-                        return;
-                    } else if (fc.name === 'setVolume') {
+                     if (fc.name === 'setVolume') {
                         const level = (fc.args as any).level;
                         const newVolume = Math.max(0, Math.min(100, level)) / 100;
                         setVolume(newVolume);
@@ -390,13 +388,18 @@ export const useJarvis = ({ onCommand, onPlayVideo }: UseJarvisProps = {}) => {
                sourcesRef.current.add(source);
             }
           },
-          onclose: () => {
-            console.log("Connection closed");
+          onclose: (e) => {
+            console.log("Connection closed", e);
+            setConnectionState(ConnectionState.DISCONNECTED);
+            // Don't call cleanup immediately if it's a temp drop, but here we assume close = done
             cleanup();
           },
           onerror: (err) => {
             console.error("Connection error:", err);
-            setError("Connection failed. Please try again.");
+            // Don't show error if it's just a close event masquerading
+            if (connectionStateRef.current === ConnectionState.CONNECTED) {
+               setError("Lost connection to Jarvis Network.");
+            }
             cleanup();
           }
         }
