@@ -120,7 +120,7 @@ const App: React.FC = () => {
             <h1 className="text-lg md:text-2xl font-bold tracking-[0.2em] text-cyan-500 uppercase drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
             JARVIS
             </h1>
-            <p className="hidden md:block text-[10px] text-cyan-700 tracking-widest mt-1">SYSTEM ONLINE</p>
+            <p className="hidden md:block text-[10px] text-cyan-700 tracking-widest mt-1">SISTEMA ONLINE</p>
         </div>
 
         {/* Tab Navigation & Status & Logout */}
@@ -142,9 +142,9 @@ const App: React.FC = () => {
                  }`}>
                     {apiKeyStatus === 'leaked' ? <ShieldAlert size={10} /> : <Key size={10} className={isApiKeyReady ? '' : 'animate-pulse'} />}
                     <span>{
-                        apiKeyStatus === 'valid' ? 'KEY: SECURE' : 
-                        apiKeyStatus === 'leaked' ? 'KEY: LEAKED' : 
-                        apiKeyStatus === 'checking' ? 'CHECKING' : 'KEY: ERROR'
+                        apiKeyStatus === 'valid' ? 'CHAVE: OK' : 
+                        apiKeyStatus === 'leaked' ? 'CHAVE: VAZADA' : 
+                        apiKeyStatus === 'checking' ? 'VERIFICANDO' : 'CHAVE: ERRO'
                     }</span>
                  </div>
             </div>
@@ -155,7 +155,7 @@ const App: React.FC = () => {
                     className={`p-2 rounded text-[10px] font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'voice' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
                 >
                     <Activity size={14} />
-                    <span className="hidden md:inline">Voice</span>
+                    <span className="hidden md:inline">Voz</span>
                 </button>
                 <button 
                     onClick={() => { setActiveTab('chat'); }}
@@ -169,7 +169,7 @@ const App: React.FC = () => {
              <button 
                 onClick={handleResetConnection}
                 className="p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all shrink-0"
-                title="Connection Settings"
+                title="Configurações de Conexão"
             >
                 <Settings size={16} />
             </button>
@@ -177,7 +177,7 @@ const App: React.FC = () => {
             <button 
                 onClick={handleLogout}
                 className="p-2 rounded-lg border border-red-900/30 text-red-900/60 hover:text-red-400 hover:bg-red-900/20 hover:border-red-500/50 transition-all shrink-0"
-                title="Disconnect/Logout"
+                title="Desconectar"
             >
                 <LogOut size={16} />
             </button>
@@ -206,17 +206,17 @@ const App: React.FC = () => {
                         onClick={handleResetConnection}
                         className="text-[10px] text-cyan-700 hover:text-cyan-400 underline decoration-dashed underline-offset-4"
                     >
-                        Check Connection Settings
+                        Verificar Configurações
                     </button>
                 </div>
               ) : (
                 <>
                   <p className={`text-base md:text-lg font-light tracking-wide transition-colors duration-300 ${isConnected ? 'text-cyan-400' : 'text-gray-400'} ${isPlaying ? 'text-cyan-200 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]' : ''}`}>
                     {connectionState === ConnectionState.CONNECTED 
-                      ? (isPlaying ? "SPEAKING..." : "LISTENING...") 
+                      ? (isPlaying ? "FALANDO..." : "OUVINDO...") 
                       : connectionState === ConnectionState.CONNECTING 
-                          ? "INITIALIZING..." 
-                          : "STANDBY"}
+                          ? "INICIALIZANDO..." 
+                          : "AGUARDANDO"}
                   </p>
                   
                   {/* Voice Command Hints */}
@@ -224,7 +224,7 @@ const App: React.FC = () => {
                       {connectionState === ConnectionState.DISCONNECTED ? (
                         <div className="flex items-center gap-2 animate-pulse">
                             <Command size={10} />
-                            <span>Say "Inicializar" to start</span>
+                            <span>Diga "Inicializar" para começar</span>
                         </div>
                       ) : null}
                   </div>
@@ -249,12 +249,12 @@ const App: React.FC = () => {
               {connectionState === ConnectionState.CONNECTED ? (
                 <>
                   <MicOff size={20} />
-                  <span>TERMINATE</span>
+                  <span>ENCERRAR</span>
                 </>
               ) : (
                 <>
                   <Mic size={20} />
-                  <span>{apiKeyStatus === 'leaked' ? 'SYSTEM LOCKED' : 'INITIALIZE'}</span>
+                  <span>{apiKeyStatus === 'leaked' ? 'SISTEMA BLOQUEADO' : 'INICIALIZAR'}</span>
                 </>
               )}
               
