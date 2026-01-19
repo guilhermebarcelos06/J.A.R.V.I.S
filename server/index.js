@@ -93,9 +93,10 @@ app.get('/api/verify', async (req, res) => {
         res.json({ success: true, message: 'Gemini API Key Verified' });
     } catch (error) {
         const errorMessage = error.message || error.toString();
+        const status = error.status || 500;
         
         // Detect Leaked Key specifically (Code 403 or explicit message)
-        if (errorMessage.includes('leaked') || error.status === 403 || errorMessage.includes('PERMISSION_DENIED')) {
+        if (errorMessage.includes('leaked') || status === 403 || errorMessage.includes('PERMISSION_DENIED')) {
              console.error("\n\n🚨🚨🚨 CRITICAL SECURITY ALERT 🚨🚨🚨");
              console.error("The Google API Key configured in Render has been BLOCKED.");
              console.error("Reason: Google detected the key was leaked publicly (likely via GitHub).");
@@ -106,11 +107,17 @@ app.get('/api/verify', async (req, res) => {
              
              return res.status(403).json({ success: false, error: 'API Key Leaked/Suspended' });
         }
+
+        // HANDLE QUOTA EXCEEDED (429) -> Treat as valid key
+        if (status === 429 || errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+             console.warn("Verification 429 (Quota Exceeded) - Treating as Valid Key");
+             return res.json({ success: true, message: 'Valid Key (Quota Exceeded)' });
+        }
         
         console.error("Verification failed:", errorMessage);
 
         // Other Auth errors
-        if (errorMessage.includes('API key') || error.status === 400 || error.status === 401) {
+        if (errorMessage.includes('API key') || status === 400 || status === 401) {
             return res.status(401).json({ success: false, error: 'Invalid API Key' });
         }
         

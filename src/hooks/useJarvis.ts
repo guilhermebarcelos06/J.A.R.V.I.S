@@ -178,11 +178,21 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, onControlMedi
       } catch (verifyErr: any) {
           console.error("API Key Verification Failed:", verifyErr);
           setIsApiKeyReady(false);
-          setFetchedApiKey(key); // Still set it so we can see which key failed if needed
+          setFetchedApiKey(key); 
           
-          if (verifyErr.message?.includes('leaked') || verifyErr.toString().includes('leaked') || verifyErr.toString().includes('PERMISSION_DENIED')) {
+          const errMsg = verifyErr.message || verifyErr.toString();
+
+          if (errMsg.includes('leaked') || errMsg.includes('PERMISSION_DENIED')) {
               setApiKeyStatus('leaked');
-          } else {
+          } 
+          // CRITICAL FIX: Treat 429/Resource Exhausted as a VALID key, just rate limited.
+          else if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+              console.warn("Quota exceeded (429), but key is authenticated. Proceeding as valid.");
+              setIsApiKeyReady(true);
+              setApiKeyStatus('valid');
+              return true;
+          }
+          else {
               setApiKeyStatus('invalid');
           }
           return false;
