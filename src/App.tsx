@@ -4,13 +4,12 @@ import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
 import { ConnectionState } from './types';
-import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings, Server, Key, ShieldAlert } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, LogOut, X, Youtube, Settings, Server, Key, ShieldAlert } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<'voice' | 'chat'>('voice');
-  const [chatMode, setChatMode] = useState<'text' | 'image'>('text');
   const [videoData, setVideoData] = useState<{id: string, title: string} | null>(null);
 
   // Optimization: Wrap handlers in useCallback to maintain stable references
@@ -20,11 +19,7 @@ const App: React.FC = () => {
           setActiveTab('voice');
       } else if (command === 'chat') {
           setActiveTab('chat');
-          setChatMode('text');
-      } else if (command === 'image') {
-          setActiveTab('chat');
-          setChatMode('image');
-      }
+      } 
   }, []);
 
   const handlePlayVideo = useCallback((videoId: string, title: string) => {
@@ -163,7 +158,7 @@ const App: React.FC = () => {
                     <span className="hidden md:inline">Voice</span>
                 </button>
                 <button 
-                    onClick={() => { setActiveTab('chat'); setChatMode('text'); }}
+                    onClick={() => { setActiveTab('chat'); }}
                     className={`p-2 rounded text-[10px] font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'chat' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
                 >
                     <MessageSquare size={14} />
@@ -229,14 +224,7 @@ const App: React.FC = () => {
                       {connectionState === ConnectionState.DISCONNECTED ? (
                         <div className="flex items-center gap-2 animate-pulse">
                             <Command size={10} />
-                            <span>Say "Initialize" to start</span>
-                        </div>
-                      ) : connectionState === ConnectionState.CONNECTED ? (
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="hidden md:flex items-center gap-2 text-cyan-900/60">
-                              <Sparkles size={10} />
-                              <span>Say "Switch to Image Generator"</span>
-                          </div>
+                            <span>Say "Inicializar" to start</span>
                         </div>
                       ) : null}
                   </div>
@@ -284,7 +272,7 @@ const App: React.FC = () => {
 
         {activeTab === 'chat' && (
              <div className="w-full h-full flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <ChatInterface activeTab={chatMode} onTabChange={setChatMode} userId={userId} />
+                <ChatInterface activeTab='text' onTabChange={() => {}} userId={userId} />
              </div>
         )}
 
@@ -292,7 +280,7 @@ const App: React.FC = () => {
 
       {/* Footer */}
       <div className="w-full text-center py-2 text-cyan-900/40 text-[8px] md:text-[10px] font-mono pointer-events-none border-t border-cyan-900/10 bg-black/20 shrink-0">
-        <p>GEMINI 2.5 FLASH AUDIO PREVIEW | GEMINI 2.5 FLASH IMAGE | GEMINI 3 FLASH TEXT</p>
+        <p>GEMINI 2.5 FLASH AUDIO PREVIEW | GEMINI 3 FLASH TEXT</p>
       </div>
     </div>
   );

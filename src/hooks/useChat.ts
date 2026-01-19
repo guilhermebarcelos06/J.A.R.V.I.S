@@ -1,14 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { ChatMessage } from '../types';
 
-// Determine Backend URL: Check LocalStorage first, then Env
+// Determine Backend URL - Default to production if local not set
 const getBackendUrl = () => {
     if (typeof window !== 'undefined') {
         const local = localStorage.getItem('jarvis_backend_url');
         if (local) return local.replace(/\/$/, '');
     }
-    return ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+    return ((import.meta as any).env?.VITE_BACKEND_URL || 'https://jarvis-backend-w3sx.onrender.com').replace(/\/$/, '');
 };
 const BACKEND_URL = getBackendUrl();
 
@@ -93,7 +93,7 @@ export const useChat = (userId?: string) => {
         chatSessionRef.current = ai.chats.create({
             model: 'gemini-3-flash-preview',
             config: {
-                systemInstruction: "You are Jarvis. Respond concisely, intelligently, and with a slight dry wit. You are a text-based terminal interface now.",
+                systemInstruction: "Você é o J.A.R.V.I.S. Responda de forma concisa, inteligente e com um leve tom irônico e leal. Você é uma interface de terminal de texto agora. Responda sempre em Português.",
             },
             history: messages.map(m => ({
                 role: m.role,
@@ -144,9 +144,9 @@ export const useChat = (userId?: string) => {
         
         // Detect Leaked Key Error specifically
         if (error.message?.includes('API key was reported as leaked') || error.toString().includes('leaked')) {
-            errorText = "CRITICAL SECURITY ALERT: Your API Key has been leaked and blocked by Google. Please generate a new key in Google AI Studio and update your Render Environment Variables immediately.";
+            errorText = "ALERTA CRÍTICO: Sua chave de API foi vazada e bloqueada pelo Google. Gere uma nova chave no Google AI Studio e atualize o Render.";
         } else if (error.status === 403) {
-            errorText = "ACCESS DENIED: API Key invalid or expired.";
+            errorText = "ACESSO NEGADO: Chave de API inválida ou expirada.";
         } else if (error.message) {
             errorText = `Error: ${error.message}`;
         }
@@ -163,114 +163,9 @@ export const useChat = (userId?: string) => {
     }
   }, [initializeChat, fetchedApiKey, messages, saveHistory]);
 
-  const generateImage = useCallback(async (prompt: string) => {
-      if (!prompt.trim()) return;
-
-      const userMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        text: `Generate image: ${prompt}`,
-        timestamp: Date.now(),
-      };
-      
-      const updatedMessages = [...messages, userMsg];
-      setMessages(updatedMessages);
-      saveHistory(updatedMessages);
-      setIsLoading(true);
-
-      try {
-        let imageUrl: string | undefined;
-
-        // 1. Try Backend
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/generate-image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.imageUrl) {
-                    imageUrl = data.imageUrl;
-                }
-            }
-        } catch (backendError) {
-            console.warn("Backend unavailable for image, switching to client-side generation...");
-        }
-
-        // 2. Client-side Fallback
-        if (!imageUrl) {
-            if (!fetchedApiKey) throw new Error("API Key missing. Cannot generate image without backend or local key.");
-            
-            const ai = new GoogleGenAI({ apiKey: fetchedApiKey });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts: [{ text: prompt }] },
-                config: {
-                    imageConfig: { aspectRatio: "1:1" },
-                    // Safety settings for direct client call
-                    safetySettings: [
-                        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
-                    ]
-                }
-            });
-
-            const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (part && part.inlineData) {
-                imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-            }
-        }
-
-        let aiMsg: ChatMessage;
-
-        if (imageUrl) {
-            aiMsg = {
-                id: (Date.now() + 1).toString(),
-                role: 'model',
-                image: imageUrl,
-                text: "Visual rendering complete.",
-                timestamp: Date.now(),
-            };
-        } else {
-             aiMsg = {
-                id: (Date.now() + 1).toString(),
-                role: 'model',
-                text: "Visual processors failed to render output.",
-                timestamp: Date.now(),
-            };
-        }
-        const finalMessages = [...updatedMessages, aiMsg];
-        setMessages(finalMessages);
-        saveHistory(finalMessages);
-
-      } catch (error: any) {
-          console.error("Image Gen Error:", error);
-           
-           let errorText = `Image generation protocol failed: ${error.message || "Unknown error"}`;
-           if (error.message?.includes('leaked')) {
-               errorText = "SYSTEM LOCKDOWN: API Key Compromised. Please rotate credentials.";
-           }
-
-           const errorMsg: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'model',
-            text: errorText,
-            timestamp: Date.now(),
-        };
-        setMessages(prev => [...prev, errorMsg]);
-      } finally {
-          setIsLoading(false);
-      }
-  }, [messages, saveHistory, fetchedApiKey]);
-
   return {
     messages,
     sendMessage,
-    generateImage,
     isLoading
   };
 };

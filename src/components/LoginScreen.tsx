@@ -7,7 +7,8 @@ const getBackendUrl = () => {
         const local = localStorage.getItem('jarvis_backend_url');
         if (local) return local.replace(/\/$/, '');
     }
-    return ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+    // Default to the known Render URL
+    return ((import.meta as any).env?.VITE_BACKEND_URL || 'https://jarvis-backend-w3sx.onrender.com').replace(/\/$/, '');
 };
 
 interface LoginScreenProps {

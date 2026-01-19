@@ -3,13 +3,14 @@ import { GoogleGenAI, LiveServerMessage, Modality, FunctionDeclaration, Type } f
 import { ConnectionState } from '../types';
 import { createPcmBlob, decodeAudioData, base64ToUint8Array, downsampleBuffer } from '../utils/audioUtils';
 
-// Determine Backend URL
+// Determine Backend URL - Default to production if local not set
 const getBackendUrl = () => {
     if (typeof window !== 'undefined') {
         const local = localStorage.getItem('jarvis_backend_url');
         if (local) return local.replace(/\/$/, '');
     }
-    return ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+    // Prioritize production URL default
+    return ((import.meta as any).env?.VITE_BACKEND_URL || 'https://jarvis-backend-w3sx.onrender.com').replace(/\/$/, '');
 };
 const BACKEND_URL = getBackendUrl();
 
@@ -36,7 +37,7 @@ const SWITCH_TAB_TOOL: FunctionDeclaration = {
     properties: {
       tab: {
         type: Type.STRING,
-        enum: ['voice', 'chat', 'image']
+        enum: ['voice', 'chat']
       },
     },
     required: ["tab"],
@@ -248,11 +249,13 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } },
           },
-          systemInstruction: `You are Jarvis. Intelligent, concise, witty.
-          Respond in the user's language (Portuguese/English).
-          Keep answers short unless asked for detail.
-          Use tools for volume, tabs, or video.
-          Do not disconnect automatically.`,
+          systemInstruction: `Você é o J.A.R.V.I.S. Inteligente, conciso e leal.
+          Fale sempre em Português do Brasil.
+          Seja breve nas respostas faladas, a menos que peçam detalhes.
+          Use a ferramenta 'playVideo' se o usuário pedir uma música ou vídeo.
+          Use 'setVolume' se pedirem para ajustar o volume.
+          Use 'switchTab' para mudar entre 'voice' e 'chat'.
+          Nunca se desconecte sozinho.`,
           tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
         },
         callbacks: {
@@ -314,6 +317,8 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
                             if (data.success && onPlayVideoRef.current) {
                                 onPlayVideoRef.current(data.videoId, data.title);
                                 result = "Playing";
+                            } else {
+                                result = "NotFound";
                             }
                         } catch (e) { console.error(e); }
                         if (sessionPromiseRef.current) {
@@ -384,11 +389,11 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
-    recognition.lang = 'en-US'; 
+    recognition.lang = 'pt-BR'; 
     recognition.onresult = (event: any) => {
       const last = event.results.length - 1;
       const command = event.results[last][0].transcript.trim().toLowerCase();
-      if (command.includes('initialize') || command.includes('jarvis')) connect();
+      if (command.includes('inicializar') || command.includes('jarvis')) connect();
     };
     try { recognition.start(); } catch (e) {}
     return () => { recognition.onend = null; recognition.stop(); };

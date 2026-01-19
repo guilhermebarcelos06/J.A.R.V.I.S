@@ -199,59 +199,27 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// YOUTUBE
+// YOUTUBE - FIXED AND SIMPLIFIED
 app.post('/api/youtube-search', async (req, res) => {
     try {
         const { query } = req.body;
         if (!query) return res.status(400).json({ error: 'Query required' });
-        const filters1 = await ytsr.getFilters(query);
-        const filter1 = filters1.get('Type').get('Video');
         
-        if (!filter1.url) {
-             const searchResults = await ytsr(query, { limit: 1 });
-             if (searchResults.items && searchResults.items.length > 0) {
-                 return res.json({ success: true, videoId: searchResults.items[0].id, title: searchResults.items[0].title });
-             }
+        console.log(`Searching YouTube for: ${query}`);
+        
+        // Direct search is more robust than filter parsing which often breaks
+        const searchResults = await ytsr(query, { limit: 5 });
+        
+        // Find the first item that is actually a video
+        const video = searchResults.items.find(item => item.type === 'video');
+
+        if (video) {
+             return res.json({ success: true, videoId: video.id, title: video.title });
+        } else {
              return res.status(404).json({ success: false, error: 'No videos found' });
         }
-        const searchResults = await ytsr(filter1.url, { limit: 1 });
-        if (searchResults.items && searchResults.items.length > 0) {
-            const video = searchResults.items[0];
-            return res.json({ success: true, videoId: video.id, title: video.title });
-        } else {
-            return res.status(404).json({ success: false, error: 'No videos found' });
-        }
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// IMAGE GENERATION
-app.post('/api/generate-image', async (req, res) => {
-    try {
-        const { prompt } = req.body;
-        if (!prompt) return res.status(400).json({ error: 'Prompt required' });
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: [{ parts: [{ text: prompt }] }],
-            config: {
-                imageConfig: { aspectRatio: "1:1" },
-                safetySettings: [
-                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
-                ]
-            }
-        });
-        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        if (part && part.inlineData) {
-            const imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-            return res.json({ success: true, imageUrl });
-        } else {
-            return res.status(500).json({ success: false, error: 'No image data returned' });
-        }
-    } catch (error) {
+        console.error("YouTube Search Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
