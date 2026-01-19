@@ -92,15 +92,23 @@ app.get('/api/verify', async (req, res) => {
         });
         res.json({ success: true, message: 'Gemini API Key Verified' });
     } catch (error) {
-        console.error("Verification failed:", error);
-        
         const errorMessage = error.message || error.toString();
         
         // Detect Leaked Key specifically (Code 403 or explicit message)
         if (errorMessage.includes('leaked') || error.status === 403 || errorMessage.includes('PERMISSION_DENIED')) {
+             console.error("\n\n🚨🚨🚨 CRITICAL SECURITY ALERT 🚨🚨🚨");
+             console.error("The Google API Key configured in Render has been BLOCKED.");
+             console.error("Reason: Google detected the key was leaked publicly (likely via GitHub).");
+             console.error("ACTION REQUIRED:");
+             console.error("1. Go to https://aistudio.google.com/app/apikey and generate a NEW key.");
+             console.error("2. Go to Render Dashboard -> Environment -> Edit 'API_KEY' with the new value.");
+             console.error("3. Save to trigger a redeploy.\n\n");
+             
              return res.status(403).json({ success: false, error: 'API Key Leaked/Suspended' });
         }
         
+        console.error("Verification failed:", errorMessage);
+
         // Other Auth errors
         if (errorMessage.includes('API key') || error.status === 400 || error.status === 401) {
             return res.status(401).json({ success: false, error: 'Invalid API Key' });
