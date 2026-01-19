@@ -4,13 +4,14 @@ import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
 import { ConnectionState } from './types';
-import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, LogOut, X, Youtube, Settings, Server, Key, ShieldAlert } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, LogOut, X, Youtube, Settings, Server, Key, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<'voice' | 'chat'>('voice');
   const [videoData, setVideoData] = useState<{id: string, title: string} | null>(null);
+  const [videoSize, setVideoSize] = useState<'small' | 'large'>('small');
 
   // Optimization: Wrap handlers in useCallback to maintain stable references
   const handleCommand = useCallback((command: string) => {
@@ -24,6 +25,11 @@ const App: React.FC = () => {
 
   const handlePlayVideo = useCallback((videoId: string, title: string) => {
       setVideoData({ id: videoId, title });
+      setVideoSize('small'); // Reset size on new video
+  }, []);
+
+  const handleResizeVideo = useCallback((size: 'small' | 'large') => {
+      setVideoSize(size);
   }, []);
 
   const { 
@@ -40,6 +46,7 @@ const App: React.FC = () => {
   } = useJarvis({ 
       onCommand: handleCommand,
       onPlayVideo: handlePlayVideo,
+      onResizeVideo: handleResizeVideo,
       enabled: isAuthenticated
   });
 
@@ -75,6 +82,11 @@ const App: React.FC = () => {
       return <LoginScreen onLogin={handleLogin} />;
   }
 
+  // Calculate dynamic classes for video player based on state
+  const videoClasses = videoSize === 'large' 
+      ? "absolute top-20 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-5xl aspect-video" 
+      : "absolute top-20 right-4 z-50 w-80 md:w-96 aspect-video";
+
   return (
     // Main Container - Uses h-[100dvh] for mobile browser compatibility (handles address bar resizing)
     <div className="h-[100dvh] w-full bg-neutral-950 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black flex flex-col font-sans text-cyan-50 relative overflow-hidden animate-in fade-in duration-1000 touch-none">
@@ -84,20 +96,32 @@ const App: React.FC = () => {
 
       {/* Floating Video Player Overlay */}
       {videoData && (
-          <div className="absolute top-20 right-4 z-50 w-80 md:w-96 bg-black/80 border border-cyan-500/50 rounded-lg overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.3)] backdrop-blur-md animate-in fade-in slide-in-from-right-10 duration-500">
-              <div className="flex items-center justify-between p-2 bg-gradient-to-r from-cyan-900/50 to-transparent border-b border-cyan-500/30">
-                  <div className="flex items-center gap-2 text-cyan-400 text-xs font-mono uppercase tracking-wider">
-                      <Youtube size={14} />
-                      <span className="truncate max-w-[200px]">{videoData.title}</span>
+          <div 
+            className={`bg-black/80 border border-cyan-500/50 rounded-lg overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.3)] backdrop-blur-md animate-in fade-in zoom-in duration-300 flex flex-col transition-all ${videoClasses}`}
+            style={videoSize === 'small' ? { resize: 'horizontal', overflow: 'hidden', minWidth: '300px', maxWidth: '90vw' } : {}}
+          >
+              <div className="flex items-center justify-between p-2 bg-gradient-to-r from-cyan-900/50 to-transparent border-b border-cyan-500/30 shrink-0 cursor-move">
+                  <div className="flex items-center gap-2 text-cyan-400 text-xs font-mono uppercase tracking-wider overflow-hidden">
+                      <Youtube size={14} className="shrink-0" />
+                      <span className="truncate">{videoData.title}</span>
                   </div>
-                  <button 
-                      onClick={() => setVideoData(null)}
-                      className="p-1 hover:text-red-400 text-cyan-600 transition-colors"
-                  >
-                      <X size={16} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                      <button 
+                          onClick={() => setVideoSize(prev => prev === 'small' ? 'large' : 'small')}
+                          className="p-1 hover:text-cyan-200 text-cyan-600 transition-colors"
+                          title={videoSize === 'small' ? "Expand" : "Shrink"}
+                      >
+                          {videoSize === 'small' ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
+                      </button>
+                      <button 
+                          onClick={() => setVideoData(null)}
+                          className="p-1 hover:text-red-400 text-cyan-600 transition-colors"
+                      >
+                          <X size={16} />
+                      </button>
+                  </div>
               </div>
-              <div className="aspect-video w-full bg-black">
+              <div className="flex-1 w-full bg-black relative">
                   <iframe 
                       width="100%" 
                       height="100%" 
@@ -106,11 +130,16 @@ const App: React.FC = () => {
                       frameBorder="0" 
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                       allowFullScreen
+                      className="absolute inset-0"
                   ></iframe>
               </div>
-              <div className="h-1 w-full bg-cyan-900/30 overflow-hidden">
+              <div className="h-1 w-full bg-cyan-900/30 overflow-hidden shrink-0">
                    <div className="h-full bg-cyan-500/50 w-full animate-progress-indeterminate"></div>
               </div>
+              {/* Drag handle hint for manual resize */}
+              {videoSize === 'small' && (
+                <div className="absolute bottom-0 right-0 w-4 h-4 cursor-ew-resize bg-gradient-to-tl from-cyan-500/50 to-transparent pointer-events-none"></div>
+              )}
           </div>
       )}
 

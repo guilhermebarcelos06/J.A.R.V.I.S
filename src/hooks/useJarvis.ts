@@ -59,13 +59,35 @@ const PLAY_VIDEO_TOOL: FunctionDeclaration = {
   },
 };
 
+const RESIZE_VIDEO_TOOL: FunctionDeclaration = {
+  name: "resizeVideo",
+  description: "Resizes the video player window.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      size: {
+        type: Type.STRING,
+        enum: ['small', 'large'],
+        description: "The target size: 'small' (default/minimized) or 'large' (expanded/theater mode).",
+      },
+    },
+    required: ["size"],
+  },
+};
+
+const TERMINATE_SESSION_TOOL: FunctionDeclaration = {
+  name: "terminateSession",
+  description: "Ends the voice session and disconnects the microphone.",
+};
+
 interface UseJarvisProps {
     onCommand?: (command: string) => void;
     onPlayVideo?: (videoId: string, title: string) => void;
+    onResizeVideo?: (size: 'small' | 'large') => void;
     enabled?: boolean;
 }
 
-export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisProps = {}) => {
+export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, enabled = true }: UseJarvisProps = {}) => {
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5); 
@@ -94,6 +116,7 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
   const volumeRef = useRef(volume);
   const onCommandRef = useRef(onCommand);
   const onPlayVideoRef = useRef(onPlayVideo);
+  const onResizeVideoRef = useRef(onResizeVideo);
 
   useEffect(() => {
     connectionStateRef.current = connectionState;
@@ -106,6 +129,10 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
   useEffect(() => {
       onPlayVideoRef.current = onPlayVideo;
   }, [onPlayVideo]);
+  
+  useEffect(() => {
+      onResizeVideoRef.current = onResizeVideo;
+  }, [onResizeVideo]);
 
   useEffect(() => {
     volumeRef.current = volume;
@@ -201,6 +228,13 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
     setAnalyserNode(null);
   }, []);
 
+  const disconnect = useCallback(() => {
+    if(sessionPromiseRef.current) {
+        sessionPromiseRef.current.then(session => { if(session.close) session.close(); }).catch(() => {});
+    }
+    cleanup();
+  }, [cleanup]);
+
   const connect = useCallback(async () => {
     try {
       if (!fetchedApiKey || apiKeyStatus !== 'valid') {
@@ -251,12 +285,16 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
           },
           systemInstruction: `Você é o J.A.R.V.I.S. Inteligente, conciso e leal.
           Fale sempre em Português do Brasil.
-          Seja breve nas respostas faladas, a menos que peçam detalhes.
-          Use a ferramenta 'playVideo' se o usuário pedir uma música ou vídeo.
-          Use 'setVolume' se pedirem para ajustar o volume.
-          Use 'switchTab' para mudar entre 'voice' e 'chat'.
-          Nunca se desconecte sozinho.`,
-          tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL] }],
+          
+          CAPACIDADES:
+          1. Ajustar Volume: Use 'setVolume'.
+          2. Navegar: Use 'switchTab' para mudar entre abas.
+          3. Multimídia: Use 'playVideo' para tocar músicas/vídeos no YouTube.
+          4. Vídeo Player: Use 'resizeVideo' se o usuário pedir para aumentar, diminuir, ou mudar o tamanho da tela do vídeo.
+          5. CONTROLE DA SESSÃO: Se o usuário disser "encerrar", "tchau", "desligar" ou "pare de ouvir", você DEVE usar a ferramenta 'terminateSession' imediatamente.
+
+          Seja breve nas respostas faladas.`,
+          tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL, RESIZE_VIDEO_TOOL, TERMINATE_SESSION_TOOL] }],
         },
         callbacks: {
           onopen: () => {
@@ -324,6 +362,18 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
                         if (sessionPromiseRef.current) {
                            sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result } } }));
                         }
+                    } else if (fc.name === 'resizeVideo') {
+                         const size = (fc.args as any).size;
+                         if (onResizeVideoRef.current) onResizeVideoRef.current(size);
+                         if (sessionPromiseRef.current) {
+                           sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "OK" } } }));
+                        }
+                    } else if (fc.name === 'terminateSession') {
+                         if (sessionPromiseRef.current) {
+                           // Send response first then disconnect
+                           await sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "Terminating" } } }));
+                           setTimeout(() => disconnect(), 500); 
+                        }
                     }
                 }
             }
@@ -374,13 +424,6 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
       cleanup();
     }
   }, [cleanup, fetchedApiKey, apiKeyStatus]);
-
-  const disconnect = useCallback(() => {
-    if(sessionPromiseRef.current) {
-        sessionPromiseRef.current.then(session => { if(session.close) session.close(); }).catch(() => {});
-    }
-    cleanup();
-  }, [cleanup]);
 
   useEffect(() => {
     if (connectionState !== ConnectionState.DISCONNECTED) return;
