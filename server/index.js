@@ -20,7 +20,6 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 
 // --- DATABASE CONFIGURATION ---
-// CLEANUP: Remove accidental quotes or whitespace from the connection string
 let MONGO_URI = process.env.MONGO_URI;
 if (MONGO_URI) {
     MONGO_URI = MONGO_URI.trim().replace(/^["']|["']$/g, '');
@@ -94,11 +93,20 @@ app.get('/api/verify', async (req, res) => {
         res.json({ success: true, message: 'Gemini API Key Verified' });
     } catch (error) {
         console.error("Verification failed:", error);
-        // Check for specific API key errors
-        if (error.message?.includes('API key') || error.status === 403 || error.status === 400) {
+        
+        const errorMessage = error.message || error.toString();
+        
+        // Detect Leaked Key specifically (Code 403 or explicit message)
+        if (errorMessage.includes('leaked') || error.status === 403 || errorMessage.includes('PERMISSION_DENIED')) {
+             return res.status(403).json({ success: false, error: 'API Key Leaked/Suspended' });
+        }
+        
+        // Other Auth errors
+        if (errorMessage.includes('API key') || error.status === 400 || error.status === 401) {
             return res.status(401).json({ success: false, error: 'Invalid API Key' });
         }
-        res.status(500).json({ success: false, error: 'Gemini Unreachable' });
+        
+        res.status(500).json({ success: false, error: 'Gemini Service Unreachable' });
     }
 });
 

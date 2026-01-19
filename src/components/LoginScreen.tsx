@@ -56,9 +56,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                     if (verifyRes.ok && verifyData.success) {
                         setKeyStatus('valid');
                     } else {
-                        // Backend returns 401 if key is invalid, or 500 if other error
-                        if (verifyRes.status === 401 || verifyData.error?.includes('leaked')) {
-                            setKeyStatus('leaked'); // Treat as leaked/invalid for UI
+                        // Backend returns 403 explicitly for Leaked Key, or text match
+                        if (verifyRes.status === 403 || verifyData.error?.toLowerCase().includes('leaked')) {
+                            setKeyStatus('leaked'); 
                         } else {
                             setKeyStatus('invalid');
                         }
@@ -195,9 +195,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               setKeyStatus('valid');
           } else {
               setTestStatus('fail');
-              setTestMessage(data.error || `Error: ${res.status} (Check Key)`);
-              setServerStatus('online'); // Server is reachable but maybe error
-              setKeyStatus('invalid');
+              
+              if (res.status === 403 || data.error?.toLowerCase().includes('leaked')) {
+                  setTestMessage("CRITICAL: API KEY LEAKED (403)");
+                  setKeyStatus('leaked');
+              } else {
+                  setTestMessage(data.error || `Error: ${res.status} (Check Key)`);
+                  setKeyStatus('invalid');
+              }
+              setServerStatus('online');
           }
       } catch (e: any) {
           setTestStatus('fail');
