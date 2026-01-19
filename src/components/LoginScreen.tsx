@@ -24,7 +24,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
   // Connection Indicators State
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  const [keyStatus, setKeyStatus] = useState<'checking' | 'valid' | 'invalid'>('checking');
+  const [keyStatus, setKeyStatus] = useState<'checking' | 'valid' | 'invalid' | 'leaked'>('checking');
 
   // Config Modal State
   const [showConfig, setShowConfig] = useState(false);
@@ -52,10 +52,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   try {
                     const verifyRes = await fetch(`${url}/api/verify`);
                     const verifyData = await verifyRes.json();
+                    
                     if (verifyRes.ok && verifyData.success) {
                         setKeyStatus('valid');
                     } else {
-                        setKeyStatus('invalid');
+                        // Backend returns 401 if key is invalid, or 500 if other error
+                        if (verifyRes.status === 401 || verifyData.error?.includes('leaked')) {
+                            setKeyStatus('leaked'); // Treat as leaked/invalid for UI
+                        } else {
+                            setKeyStatus('invalid');
+                        }
                     }
                   } catch {
                       setKeyStatus('invalid');
@@ -310,11 +316,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           {/* Key Status */}
            <div className={`flex items-center gap-2 text-[10px] font-mono tracking-widest px-2 py-1 rounded border backdrop-blur-md transition-all duration-500 ${
               keyStatus === 'valid' ? 'bg-green-900/20 border-green-500/30 text-green-400' : 
+              keyStatus === 'leaked' ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' :
               keyStatus === 'invalid' ? 'bg-red-900/20 border-red-500/30 text-red-400' :
               'bg-gray-900/20 border-gray-500/30 text-gray-400'
           }`}>
               <Key size={12} className={keyStatus === 'checking' ? 'animate-pulse' : ''} />
-              <span>{keyStatus === 'valid' ? 'KEY: SECURE' : keyStatus === 'invalid' ? 'KEY: MISSING' : 'VERIFYING...'}</span>
+              <span>{
+                  keyStatus === 'valid' ? 'KEY: SECURE' : 
+                  keyStatus === 'leaked' ? 'KEY: LEAKED' : 
+                  keyStatus === 'invalid' ? 'KEY: MISSING' : 'VERIFYING...'
+              }</span>
           </div>
       </div>
 

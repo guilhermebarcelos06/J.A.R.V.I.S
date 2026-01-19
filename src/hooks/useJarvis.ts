@@ -113,58 +113,59 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
     }
   }, [volume]);
 
-  // Fetch API Key AND Verify it
+  // HELPER: Verify any key
+  const verifyKey = async (key: string) => {
+      try {
+          const ai = new GoogleGenAI({ apiKey: key });
+          await ai.models.generateContent({
+              model: 'gemini-3-flash-preview',
+              contents: { parts: [{ text: '' }] }
+          });
+          setFetchedApiKey(key);
+          setIsApiKeyReady(true);
+          setApiKeyStatus('valid');
+          return true;
+      } catch (verifyErr: any) {
+          console.error("API Key Verification Failed:", verifyErr);
+          setIsApiKeyReady(false);
+          setFetchedApiKey(key); // Still set it so we can see which key failed if needed
+          
+          if (verifyErr.message?.includes('leaked') || verifyErr.toString().includes('leaked') || verifyErr.toString().includes('PERMISSION_DENIED')) {
+              setApiKeyStatus('leaked');
+          } else {
+              setApiKeyStatus('invalid');
+          }
+          return false;
+      }
+  };
+
+  // Fetch API Key
   useEffect(() => {
     if (!enabled) return;
 
-    const fetchKey = async (retries = 20) => {
+    const fetchKey = async (retries = 10) => {
         try {
-            // 1. Get Key
             const res = await fetch(`${BACKEND_URL}/api/config`);
-            if (!res.ok) throw new Error("Backend config failed");
-            
-            const data = await res.json();
-            if (!data.apiKey) throw new Error("No key in response");
-            
-            const key = data.apiKey;
-            setFetchedApiKey(key);
-            setIsBackendConnected(true);
-
-            // 2. Verify Key (Ping Gemini)
-            try {
-                // We use a separate verify endpoint if available to keep secret on server, 
-                // OR fallback to client check if we have the key.
-                // Since we have the key client-side here:
-                const ai = new GoogleGenAI({ apiKey: key });
-                await ai.models.generateContent({
-                    model: 'gemini-3-flash-preview',
-                    contents: { parts: [{ text: '' }] } // Empty prompt just to check auth
-                });
-                setIsApiKeyReady(true);
-                setApiKeyStatus('valid');
-            } catch (verifyErr: any) {
-                console.error("API Key Verification Failed:", verifyErr);
-                setIsApiKeyReady(false);
-                if (verifyErr.message?.includes('leaked') || verifyErr.toString().includes('leaked')) {
-                    setApiKeyStatus('leaked');
-                } else {
-                    setApiKeyStatus('invalid');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.apiKey) {
+                    setIsBackendConnected(true);
+                    await verifyKey(data.apiKey);
+                    return;
                 }
             }
-
+            throw new Error("No key in response");
         } catch (e) {
             setIsBackendConnected(false);
             if (retries > 0) {
-                setTimeout(() => fetchKey(retries - 1), 3000);
+                setTimeout(() => fetchKey(retries - 1), 2000);
             } else {
-                // Fallback
+                // Fallback to local
                 const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
                                (import.meta as any).env?.VITE_API_KEY ||
                                (window as any).GEMINI_API_KEY;
                 if (envKey) {
-                    setFetchedApiKey(envKey);
-                    setIsApiKeyReady(true);
-                    setApiKeyStatus('valid');
+                    await verifyKey(envKey);
                 } else {
                     setIsApiKeyReady(false);
                     setApiKeyStatus('invalid');
@@ -202,7 +203,7 @@ export const useJarvis = ({ onCommand, onPlayVideo, enabled = true }: UseJarvisP
   const connect = useCallback(async () => {
     try {
       if (!fetchedApiKey || apiKeyStatus !== 'valid') {
-          setError(`Authentication Failed: API Key ${apiKeyStatus.toUpperCase()}`);
+          setError(`System Halted: API Key ${apiKeyStatus.toUpperCase()}`);
           return;
       }
 

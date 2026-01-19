@@ -120,7 +120,7 @@ const App: React.FC = () => {
       )}
 
       {/* Header - Fixed Height */}
-      <div className="w-full flex items-center justify-between px-3 md:px-8 py-3 md:py-4 z-10 border-b border-cyan-900/20 bg-black/20 backdrop-blur-sm shrink-0 gap-2">
+      <div className="w-full flex items-center justify-between px-3 md:px-6 py-3 z-10 border-b border-cyan-900/20 bg-black/20 backdrop-blur-sm shrink-0 gap-2">
         <div className="text-left shrink-0">
             <h1 className="text-lg md:text-2xl font-bold tracking-[0.2em] text-cyan-500 uppercase drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
             JARVIS
@@ -131,8 +131,8 @@ const App: React.FC = () => {
         {/* Tab Navigation & Status & Logout */}
         <div className="flex items-center gap-2 md:gap-4 flex-1 justify-end min-w-0">
             
-            {/* STATUS INDICATORS - ALWAYS VISIBLE */}
-            <div className="flex flex-col items-end mr-1 md:mr-4 gap-1 shrink-0">
+            {/* STATUS INDICATORS - ALWAYS VISIBLE - NO HIDDEN CLASSES */}
+            <div className="flex flex-col items-end mr-1 gap-1 shrink-0">
                  <div className={`flex items-center gap-1.5 text-[8px] md:text-[10px] font-mono tracking-wider transition-all duration-500 px-1.5 py-0.5 rounded border whitespace-nowrap ${
                      isBackendConnected ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-red-900/30 text-red-400 border-red-500/30'
                  }`}>
@@ -147,9 +147,9 @@ const App: React.FC = () => {
                  }`}>
                     {apiKeyStatus === 'leaked' ? <ShieldAlert size={10} /> : <Key size={10} className={isApiKeyReady ? '' : 'animate-pulse'} />}
                     <span>{
-                        apiKeyStatus === 'valid' ? 'KEY: OK' : 
+                        apiKeyStatus === 'valid' ? 'KEY: SECURE' : 
                         apiKeyStatus === 'leaked' ? 'KEY: LEAKED' : 
-                        apiKeyStatus === 'checking' ? 'CHECKING' : 'KEY: BAD'
+                        apiKeyStatus === 'checking' ? 'CHECKING' : 'KEY: ERROR'
                     }</span>
                  </div>
             </div>
@@ -157,25 +157,23 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-cyan-900/30 shrink-0">
                 <button 
                     onClick={() => setActiveTab('voice')}
-                    className={`p-2 md:px-4 md:py-2 rounded text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'voice' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
+                    className={`p-2 rounded text-[10px] font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'voice' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
                 >
                     <Activity size={14} />
                     <span className="hidden md:inline">Voice</span>
                 </button>
                 <button 
                     onClick={() => { setActiveTab('chat'); setChatMode('text'); }}
-                    className={`p-2 md:px-4 md:py-2 rounded text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'chat' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
+                    className={`p-2 rounded text-[10px] font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'chat' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
                 >
                     <MessageSquare size={14} />
                     <span className="hidden md:inline">Chat</span>
                 </button>
             </div>
             
-            <div className="h-8 w-[1px] bg-cyan-900/30 mx-1 hidden sm:block"></div>
-
              <button 
                 onClick={handleResetConnection}
-                className="hidden sm:block p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all shrink-0"
+                className="p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all shrink-0"
                 title="Connection Settings"
             >
                 <Settings size={16} />
@@ -255,7 +253,7 @@ const App: React.FC = () => {
                 ${connectionState === ConnectionState.CONNECTED 
                   ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/50 hover:shadow-[0_0_20px_rgba(239,68,68,0.3)]' 
                   : apiKeyStatus === 'leaked' 
-                      ? 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed'
+                      ? 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed opacity-50'
                       : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/50 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)]'
                 }
               `}
