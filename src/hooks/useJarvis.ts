@@ -324,17 +324,16 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, onControlMedi
           1. Ajustar Volume: Use 'setVolume'.
           2. Navegar: Use 'switchTab' para mudar entre abas.
           3. Multimídia: Use 'playVideo' para tocar músicas/vídeos.
-          4. Controle de Vídeo: Use 'controlMedia' para:
-             - 'pause': pausar.
-             - 'play': continuar/tocar.
-             - 'rewind': voltar o vídeo (se disserem "voltar").
-             - 'forward': passar/adiantar o vídeo (se disserem "passar", "pular" ou "adiantar").
-             - 'close': fechar o vídeo (se disserem "fechar", "tirar" ou "sair do vídeo").
+          4. Controle de Vídeo: Use 'controlMedia' para pausar, tocar, voltar, avançar ou fechar.
           5. Tamanho do Vídeo: Use 'resizeVideo'.
           6. SESSÃO: Use 'terminateSession' para "encerrar" ou "desligar".
+          7. PESQUISA E CLIMA: Você tem acesso à ferramenta 'googleSearch'. USE-A SEMPRE que o usuário perguntar sobre o CLIMA, PREVISÃO DO TEMPO, NOTÍCIAS ou FATOS RECENTES. Não invente dados sobre o mundo real, pesquise.
 
           Seja breve nas respostas faladas.`,
-          tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL, RESIZE_VIDEO_TOOL, CONTROL_MEDIA_TOOL, TERMINATE_SESSION_TOOL] }],
+          tools: [
+              { googleSearch: {} }, 
+              { functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL, RESIZE_VIDEO_TOOL, CONTROL_MEDIA_TOOL, TERMINATE_SESSION_TOOL] }
+          ],
         },
         callbacks: {
           onopen: () => {
