@@ -4,7 +4,7 @@ import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
 import { ConnectionState } from './types';
-import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings, Server, Key } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, Sparkles, LogOut, X, Youtube, Settings, Server, Key, ShieldAlert } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -40,7 +40,8 @@ const App: React.FC = () => {
       error, 
       analyserNode,
       isBackendConnected,
-      isApiKeyReady
+      isApiKeyReady,
+      apiKeyStatus
   } = useJarvis({ 
       onCommand: handleCommand,
       onPlayVideo: handlePlayVideo,
@@ -119,45 +120,54 @@ const App: React.FC = () => {
       )}
 
       {/* Header - Fixed Height */}
-      <div className="w-full flex items-center justify-between px-4 md:px-8 py-4 z-10 border-b border-cyan-900/20 bg-black/20 backdrop-blur-sm shrink-0">
-        <div className="text-left">
-            <h1 className="text-xl md:text-2xl font-bold tracking-[0.2em] text-cyan-500 uppercase drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
-            J.A.R.V.I.S.
+      <div className="w-full flex items-center justify-between px-3 md:px-8 py-3 md:py-4 z-10 border-b border-cyan-900/20 bg-black/20 backdrop-blur-sm shrink-0 gap-2">
+        <div className="text-left shrink-0">
+            <h1 className="text-lg md:text-2xl font-bold tracking-[0.2em] text-cyan-500 uppercase drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
+            JARVIS
             </h1>
-            <p className="hidden md:block text-[10px] text-cyan-700 tracking-widest mt-1">SYSTEM ONLINE // PROTOCOL GEMINI-LIVE</p>
+            <p className="hidden md:block text-[10px] text-cyan-700 tracking-widest mt-1">SYSTEM ONLINE</p>
         </div>
 
         {/* Tab Navigation & Status & Logout */}
-        <div className="flex items-center gap-2 md:gap-4">
+        <div className="flex items-center gap-2 md:gap-4 flex-1 justify-end min-w-0">
             
-            {/* STATUS INDICATORS - Made more visible */}
-            <div className="flex flex-col items-end mr-2 gap-1.5">
-                 <div className={`flex items-center gap-1.5 text-[9px] md:text-[10px] font-mono tracking-wider transition-all duration-500 px-2 py-0.5 rounded ${isBackendConnected ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30'}`}>
+            {/* STATUS INDICATORS - ALWAYS VISIBLE */}
+            <div className="flex flex-col items-end mr-1 md:mr-4 gap-1 shrink-0">
+                 <div className={`flex items-center gap-1.5 text-[8px] md:text-[10px] font-mono tracking-wider transition-all duration-500 px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                     isBackendConnected ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-red-900/30 text-red-400 border-red-500/30'
+                 }`}>
                     <Server size={10} className={isBackendConnected ? '' : 'animate-pulse'} />
-                    <span className="hidden sm:inline">{isBackendConnected ? 'MAINFRAME: ON' : 'MAINFRAME: OFF'}</span>
-                    <span className="sm:hidden">SRV</span>
+                    <span>{isBackendConnected ? 'SRV: ON' : 'SRV: OFF'}</span>
                  </div>
-                 <div className={`flex items-center gap-1.5 text-[9px] md:text-[10px] font-mono tracking-wider transition-all duration-500 px-2 py-0.5 rounded ${isApiKeyReady ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30'}`}>
-                    <Key size={10} className={isApiKeyReady ? '' : 'animate-pulse'} />
-                    <span className="hidden sm:inline">{isApiKeyReady ? 'KEY: SECURE' : 'KEY: MISSING'}</span>
-                    <span className="sm:hidden">KEY</span>
+                 
+                 <div className={`flex items-center gap-1.5 text-[8px] md:text-[10px] font-mono tracking-wider transition-all duration-500 px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                     apiKeyStatus === 'valid' ? 'bg-green-900/30 text-green-400 border-green-500/30' : 
+                     apiKeyStatus === 'leaked' ? 'bg-red-500/20 text-red-400 border-red-500 animate-pulse' :
+                     'bg-red-900/30 text-red-400 border-red-500/30'
+                 }`}>
+                    {apiKeyStatus === 'leaked' ? <ShieldAlert size={10} /> : <Key size={10} className={isApiKeyReady ? '' : 'animate-pulse'} />}
+                    <span>{
+                        apiKeyStatus === 'valid' ? 'KEY: OK' : 
+                        apiKeyStatus === 'leaked' ? 'KEY: LEAKED' : 
+                        apiKeyStatus === 'checking' ? 'CHECKING' : 'KEY: BAD'
+                    }</span>
                  </div>
             </div>
 
-            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-cyan-900/30">
+            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-cyan-900/30 shrink-0">
                 <button 
                     onClick={() => setActiveTab('voice')}
-                    className={`px-3 py-2 md:px-4 md:py-2 rounded text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'voice' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
+                    className={`p-2 md:px-4 md:py-2 rounded text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'voice' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
                 >
                     <Activity size={14} />
-                    <span className="hidden md:inline">Voice Link</span>
+                    <span className="hidden md:inline">Voice</span>
                 </button>
                 <button 
                     onClick={() => { setActiveTab('chat'); setChatMode('text'); }}
-                    className={`px-3 py-2 md:px-4 md:py-2 rounded text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'chat' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
+                    className={`p-2 md:px-4 md:py-2 rounded text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${activeTab === 'chat' ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-cyan-900 hover:text-cyan-500'}`}
                 >
                     <MessageSquare size={14} />
-                    <span className="hidden md:inline">Terminal</span>
+                    <span className="hidden md:inline">Chat</span>
                 </button>
             </div>
             
@@ -165,7 +175,7 @@ const App: React.FC = () => {
 
              <button 
                 onClick={handleResetConnection}
-                className="hidden sm:block p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all"
+                className="hidden sm:block p-2 rounded-lg border border-cyan-900/30 text-cyan-900/60 hover:text-cyan-400 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all shrink-0"
                 title="Connection Settings"
             >
                 <Settings size={16} />
@@ -173,7 +183,7 @@ const App: React.FC = () => {
 
             <button 
                 onClick={handleLogout}
-                className="p-2 rounded-lg border border-red-900/30 text-red-900/60 hover:text-red-400 hover:bg-red-900/20 hover:border-red-500/50 transition-all"
+                className="p-2 rounded-lg border border-red-900/30 text-red-900/60 hover:text-red-400 hover:bg-red-900/20 hover:border-red-500/50 transition-all shrink-0"
                 title="Disconnect/Logout"
             >
                 <LogOut size={16} />
@@ -191,10 +201,10 @@ const App: React.FC = () => {
             </div>
 
             {/* Status Text */}
-            <div className="h-16 flex flex-col items-center justify-center gap-2">
+            <div className="h-16 flex flex-col items-center justify-center gap-2 text-center w-full px-4">
               {error ? (
-                <div className="flex flex-col items-center gap-2 animate-pulse">
-                    <div className="flex items-center gap-2 text-red-500 bg-red-950/30 px-4 py-2 rounded-full border border-red-900/50 backdrop-blur-sm max-w-[90vw] text-center">
+                <div className="flex flex-col items-center gap-2 animate-pulse w-full max-w-md">
+                    <div className="flex items-center gap-2 text-red-500 bg-red-950/30 px-4 py-2 rounded-full border border-red-900/50 backdrop-blur-sm w-full justify-center">
                       <AlertCircle size={16} className="shrink-0" />
                       <span className="text-xs md:text-sm font-mono truncate">{error}</span>
                     </div>
@@ -239,12 +249,15 @@ const App: React.FC = () => {
             {/* Control Button */}
             <button
               onClick={handleToggleConnection}
-              disabled={connectionState === ConnectionState.CONNECTING}
+              disabled={connectionState === ConnectionState.CONNECTING || apiKeyStatus === 'leaked'}
               className={`
                 group relative px-6 py-3 md:px-8 md:py-4 rounded-full font-bold tracking-wider transition-all duration-300 flex items-center gap-3
                 ${connectionState === ConnectionState.CONNECTED 
                   ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/50 hover:shadow-[0_0_20px_rgba(239,68,68,0.3)]' 
-                  : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/50 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)]'}
+                  : apiKeyStatus === 'leaked' 
+                      ? 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed'
+                      : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/50 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)]'
+                }
               `}
             >
               {connectionState === ConnectionState.CONNECTED ? (
@@ -255,7 +268,7 @@ const App: React.FC = () => {
               ) : (
                 <>
                   <Mic size={20} />
-                  <span>INITIALIZE</span>
+                  <span>{apiKeyStatus === 'leaked' ? 'SYSTEM LOCKED' : 'INITIALIZE'}</span>
                 </>
               )}
               

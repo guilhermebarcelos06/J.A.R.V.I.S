@@ -140,10 +140,21 @@ export const useChat = (userId?: string) => {
 
     } catch (error: any) {
         console.error("Chat Error:", error);
+        let errorText = "Unable to reach Jarvis Mainframe.";
+        
+        // Detect Leaked Key Error specifically
+        if (error.message?.includes('API key was reported as leaked') || error.toString().includes('leaked')) {
+            errorText = "CRITICAL SECURITY ALERT: Your API Key has been leaked and blocked by Google. Please generate a new key in Google AI Studio and update your Render Environment Variables immediately.";
+        } else if (error.status === 403) {
+            errorText = "ACCESS DENIED: API Key invalid or expired.";
+        } else if (error.message) {
+            errorText = `Error: ${error.message}`;
+        }
+
         const errorMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: 'model',
-            text: `Error: ${error.message || "Unable to reach Jarvis Mainframe."}`,
+            text: errorText,
             timestamp: Date.now(),
         };
         setMessages(prev => [...prev, errorMsg]);
@@ -238,10 +249,16 @@ export const useChat = (userId?: string) => {
 
       } catch (error: any) {
           console.error("Image Gen Error:", error);
+           
+           let errorText = `Image generation protocol failed: ${error.message || "Unknown error"}`;
+           if (error.message?.includes('leaked')) {
+               errorText = "SYSTEM LOCKDOWN: API Key Compromised. Please rotate credentials.";
+           }
+
            const errorMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: 'model',
-            text: `Image generation protocol failed: ${error.message || "Unknown error"}`,
+            text: errorText,
             timestamp: Date.now(),
         };
         setMessages(prev => [...prev, errorMsg]);
