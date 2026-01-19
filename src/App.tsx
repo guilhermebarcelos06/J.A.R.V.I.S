@@ -37,10 +37,14 @@ const App: React.FC = () => {
       setVideoSize(size);
   }, []);
 
-  const handleControlMedia = useCallback((action: 'pause' | 'play' | 'rewind' | 'forward' | 'stop') => {
+  const handleControlMedia = useCallback((action: 'pause' | 'play' | 'rewind' | 'forward' | 'stop' | 'close') => {
       console.log("Media Control:", action);
-      // We use a timestamp to ensure every command update triggers the effect in YouTubePlayer
-      setMediaCommand({ action, timestamp: Date.now() });
+      if (action === 'close') {
+          setVideoData(null);
+      } else {
+          // We use a timestamp to ensure every command update triggers the effect in YouTubePlayer
+          setMediaCommand({ action, timestamp: Date.now() });
+      }
   }, []);
 
   const { 
@@ -50,7 +54,7 @@ const App: React.FC = () => {
       isPlaying, 
       volume, 
       error, 
-      analyserNode,
+      analyserNode, 
       isBackendConnected,
       isApiKeyReady,
       apiKeyStatus

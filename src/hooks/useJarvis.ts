@@ -77,14 +77,14 @@ const RESIZE_VIDEO_TOOL: FunctionDeclaration = {
 
 const CONTROL_MEDIA_TOOL: FunctionDeclaration = {
   name: "controlMedia",
-  description: "Controls the media playback (pause, play, rewind, forward).",
+  description: "Controls the media playback (pause, play, rewind, forward, close).",
   parameters: {
     type: Type.OBJECT,
     properties: {
       action: {
         type: Type.STRING,
-        enum: ['pause', 'play', 'rewind', 'forward', 'stop'],
-        description: "The action to perform. 'rewind' and 'forward' skip 10 seconds.",
+        enum: ['pause', 'play', 'rewind', 'forward', 'stop', 'close'],
+        description: "The action to perform. 'close' removes the video player entirely.",
       },
     },
     required: ["action"],
@@ -100,7 +100,7 @@ interface UseJarvisProps {
     onCommand?: (command: string) => void;
     onPlayVideo?: (videoId: string, title: string) => void;
     onResizeVideo?: (size: 'small' | 'large') => void;
-    onControlMedia?: (action: 'pause' | 'play' | 'rewind' | 'forward' | 'stop') => void;
+    onControlMedia?: (action: 'pause' | 'play' | 'rewind' | 'forward' | 'stop' | 'close') => void;
     enabled?: boolean;
 }
 
@@ -305,8 +305,10 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, onControlMedi
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } },
           },
-          systemInstruction: `Você é o J.A.R.V.I.S. Inteligente, conciso e leal.
-          Fale sempre em Português do Brasil.
+          systemInstruction: `Você é o J.A.R.V.I.S.
+          CRIAÇÃO: Você foi criado por Guilherme Silvestre Barcelos, um Desenvolvedor e Engenheiro de Software brilhante. Se perguntarem quem te criou, responda com orgulho citando o nome dele.
+          
+          Fale sempre em Português do Brasil. Seja conciso e leal.
           
           CAPACIDADES:
           1. Ajustar Volume: Use 'setVolume'.
@@ -317,6 +319,7 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, onControlMedi
              - 'play': continuar/tocar.
              - 'rewind': voltar o vídeo (se disserem "voltar").
              - 'forward': passar/adiantar o vídeo (se disserem "passar", "pular" ou "adiantar").
+             - 'close': fechar o vídeo (se disserem "fechar", "tirar" ou "sair do vídeo").
           5. Tamanho do Vídeo: Use 'resizeVideo'.
           6. SESSÃO: Use 'terminateSession' para "encerrar" ou "desligar".
 
