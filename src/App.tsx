@@ -3,6 +3,7 @@ import { useJarvis } from './hooks/useJarvis';
 import { ArcReactor } from './components/ArcReactor';
 import { ChatInterface } from './components/ChatInterface';
 import { LoginScreen } from './components/LoginScreen';
+import { YouTubePlayer } from './components/YouTubePlayer';
 import { ConnectionState } from './types';
 import { Mic, MicOff, AlertCircle, Command, Volume2, MessageSquare, Activity, LogOut, X, Youtube, Settings, Server, Key, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
 
@@ -12,6 +13,9 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'voice' | 'chat'>('voice');
   const [videoData, setVideoData] = useState<{id: string, title: string} | null>(null);
   const [videoSize, setVideoSize] = useState<'small' | 'large'>('small');
+  
+  // State to trigger commands in the YouTube Player
+  const [mediaCommand, setMediaCommand] = useState<{action: string, timestamp: number} | null>(null);
 
   // Optimization: Wrap handlers in useCallback to maintain stable references
   const handleCommand = useCallback((command: string) => {
@@ -26,10 +30,17 @@ const App: React.FC = () => {
   const handlePlayVideo = useCallback((videoId: string, title: string) => {
       setVideoData({ id: videoId, title });
       setVideoSize('small'); // Reset size on new video
+      setMediaCommand(null); // Reset commands
   }, []);
 
   const handleResizeVideo = useCallback((size: 'small' | 'large') => {
       setVideoSize(size);
+  }, []);
+
+  const handleControlMedia = useCallback((action: 'pause' | 'play' | 'rewind' | 'forward' | 'stop') => {
+      console.log("Media Control:", action);
+      // We use a timestamp to ensure every command update triggers the effect in YouTubePlayer
+      setMediaCommand({ action, timestamp: Date.now() });
   }, []);
 
   const { 
@@ -47,6 +58,7 @@ const App: React.FC = () => {
       onCommand: handleCommand,
       onPlayVideo: handlePlayVideo,
       onResizeVideo: handleResizeVideo,
+      onControlMedia: handleControlMedia,
       enabled: isAuthenticated
   });
 
@@ -122,16 +134,10 @@ const App: React.FC = () => {
                   </div>
               </div>
               <div className="flex-1 w-full bg-black relative">
-                  <iframe 
-                      width="100%" 
-                      height="100%" 
-                      src={`https://www.youtube.com/embed/${videoData.id}?autoplay=1&playsinline=1`}
-                      title="YouTube video player" 
-                      frameBorder="0" 
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                      allowFullScreen
-                      className="absolute inset-0"
-                  ></iframe>
+                  <YouTubePlayer 
+                      videoId={videoData.id} 
+                      command={mediaCommand}
+                  />
               </div>
               <div className="h-1 w-full bg-cyan-900/30 overflow-hidden shrink-0">
                    <div className="h-full bg-cyan-500/50 w-full animate-progress-indeterminate"></div>

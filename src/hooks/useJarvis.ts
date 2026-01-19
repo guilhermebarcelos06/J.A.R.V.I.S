@@ -75,6 +75,22 @@ const RESIZE_VIDEO_TOOL: FunctionDeclaration = {
   },
 };
 
+const CONTROL_MEDIA_TOOL: FunctionDeclaration = {
+  name: "controlMedia",
+  description: "Controls the media playback (pause, play, rewind, forward).",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      action: {
+        type: Type.STRING,
+        enum: ['pause', 'play', 'rewind', 'forward', 'stop'],
+        description: "The action to perform. 'rewind' and 'forward' skip 10 seconds.",
+      },
+    },
+    required: ["action"],
+  },
+};
+
 const TERMINATE_SESSION_TOOL: FunctionDeclaration = {
   name: "terminateSession",
   description: "Ends the voice session and disconnects the microphone.",
@@ -84,10 +100,11 @@ interface UseJarvisProps {
     onCommand?: (command: string) => void;
     onPlayVideo?: (videoId: string, title: string) => void;
     onResizeVideo?: (size: 'small' | 'large') => void;
+    onControlMedia?: (action: 'pause' | 'play' | 'rewind' | 'forward' | 'stop') => void;
     enabled?: boolean;
 }
 
-export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, enabled = true }: UseJarvisProps = {}) => {
+export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, onControlMedia, enabled = true }: UseJarvisProps = {}) => {
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5); 
@@ -117,6 +134,7 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, enabled = tru
   const onCommandRef = useRef(onCommand);
   const onPlayVideoRef = useRef(onPlayVideo);
   const onResizeVideoRef = useRef(onResizeVideo);
+  const onControlMediaRef = useRef(onControlMedia);
 
   useEffect(() => {
     connectionStateRef.current = connectionState;
@@ -133,6 +151,10 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, enabled = tru
   useEffect(() => {
       onResizeVideoRef.current = onResizeVideo;
   }, [onResizeVideo]);
+
+  useEffect(() => {
+      onControlMediaRef.current = onControlMedia;
+  }, [onControlMedia]);
 
   useEffect(() => {
     volumeRef.current = volume;
@@ -289,12 +311,17 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, enabled = tru
           CAPACIDADES:
           1. Ajustar Volume: Use 'setVolume'.
           2. Navegar: Use 'switchTab' para mudar entre abas.
-          3. Multimídia: Use 'playVideo' para tocar músicas/vídeos no YouTube.
-          4. Vídeo Player: Use 'resizeVideo' se o usuário pedir para aumentar, diminuir, ou mudar o tamanho da tela do vídeo.
-          5. CONTROLE DA SESSÃO: Se o usuário disser "encerrar", "tchau", "desligar" ou "pare de ouvir", você DEVE usar a ferramenta 'terminateSession' imediatamente.
+          3. Multimídia: Use 'playVideo' para tocar músicas/vídeos.
+          4. Controle de Vídeo: Use 'controlMedia' para:
+             - 'pause': pausar.
+             - 'play': continuar/tocar.
+             - 'rewind': voltar o vídeo (se disserem "voltar").
+             - 'forward': passar/adiantar o vídeo (se disserem "passar", "pular" ou "adiantar").
+          5. Tamanho do Vídeo: Use 'resizeVideo'.
+          6. SESSÃO: Use 'terminateSession' para "encerrar" ou "desligar".
 
           Seja breve nas respostas faladas.`,
-          tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL, RESIZE_VIDEO_TOOL, TERMINATE_SESSION_TOOL] }],
+          tools: [{ functionDeclarations: [SET_VOLUME_TOOL, SWITCH_TAB_TOOL, PLAY_VIDEO_TOOL, RESIZE_VIDEO_TOOL, CONTROL_MEDIA_TOOL, TERMINATE_SESSION_TOOL] }],
         },
         callbacks: {
           onopen: () => {
@@ -368,9 +395,14 @@ export const useJarvis = ({ onCommand, onPlayVideo, onResizeVideo, enabled = tru
                          if (sessionPromiseRef.current) {
                            sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "OK" } } }));
                         }
+                    } else if (fc.name === 'controlMedia') {
+                         const action = (fc.args as any).action;
+                         if (onControlMediaRef.current) onControlMediaRef.current(action);
+                         if (sessionPromiseRef.current) {
+                           sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "OK" } } }));
+                        }
                     } else if (fc.name === 'terminateSession') {
                          if (sessionPromiseRef.current) {
-                           // Send response first then disconnect
                            await sessionPromiseRef.current.then(session => session.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "Terminating" } } }));
                            setTimeout(() => disconnect(), 500); 
                         }
