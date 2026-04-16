@@ -1,70 +1,115 @@
-J.A.R.V.I.S. - Just A Rather Very Intelligent System
+# J.A.R.V.I.S 🤖
 
-Este projeto é uma interface de assistente virtual inspirada no JARVIS do Iron Man. Desenvolvido com React e TypeScript, o J.A.R.V.I.S. oferece uma experiência imersiva com componentes futuristas, animações e funcionalidades de interação inteligentes.
+> **Just A Rather Very Intelligent System**  
+> Assistente virtual inteligente com controle por voz, integração com IA e reprodução de mídia.
 
-🚀 Funcionalidades
+---
 
-• Interface Futurista: Design inspirado nos ecrãs da Stark Industries com componentes estilizados.
-• Arc Reactor: Componente visual animado que representa o núcleo de energia do Jarvis.
-• Chat Inteligente: Interface de conversação fluida com suporte para processamento de comandos.
-• Interação por Voz: Utilização de audioUtils para feedback sonoro e processamento de áudio.
-• Player de YouTube: Integração para reprodução de conteúdos multimédia diretamente na interface.
-• Sistema de Login: Ecrã de autenticação temático para acesso ao sistema.
+## 📋 Sobre o Projeto
 
+O **J.A.R.V.I.S** é uma aplicação web desenvolvida em **React + TypeScript**, inspirada no assistente de Tony Stark do universo Marvel. Ele combina reconhecimento de voz, integração com inteligência artificial, busca no Google e controle de mídia via YouTube — tudo em uma interface moderna e responsiva.
 
-🛠️ Tecnologias Utilizadas
+---
 
-Frontend: React, TypeScript
-Build Tool: Vite
-Estilização: Tailwind CSS
-Backend: Node.js (Express)
-Gestão de Estado: Hooks Personalizados
+## ✨ Funcionalidades
 
+- 🎤 **Controle por Voz** — Envie comandos de voz para o assistente processar e responder
+- 🤖 **Integração com IA** — Respostas inteligentes via API de IA com fallback de chave de API
+- 🔍 **Busca no Google** — Pesquise na web diretamente pela interface do J.A.R.V.I.S
+- 🎵 **Player do YouTube** — Reproduza músicas e vídeos com controle de mídia integrado
+- 🔊 **Utilitário de Áudio** — Downsampling de áudio para melhor compatibilidade
+- ⚡ **Backend Dedicado** — Servidor próprio com tratamento de erros de quota de API
+- 🌐 **Deploy na Netlify** — Configurado para SPA routing com `netlify.toml`
 
-🧠 Hooks Personalizados
+---
 
-// useJarvis: Lógica principal de comportamento e cérebro do assistente.
-// useChat: Gestão de estado, histórico de mensagens e fluxo de conversação.
+## 🛠️ Tecnologias
 
+| Tecnologia | Uso |
+|---|---|
+| React | Interface do usuário |
+| TypeScript | Tipagem estática |
+| Vite | Bundler e dev server |
+| Netlify | Deploy e hosting |
+| Web Speech API | Reconhecimento de voz |
+| YouTube API | Player e controle de mídia |
+| Google Search API | Integração de busca |
 
-📦 Estrutura do Projeto
+---
 
-├── src/
-│   ├── components/       # Componentes visuais (ArcReactor, Chat, YouTubePlayer, etc.)
-│   ├── hooks/            # Lógica de estado reutilizável
-│   ├── utils/            # Utilitários de áudio e funções de suporte
-│   ├── App.tsx           # Componente principal
-│   └── types.ts          # Definições de tipos TypeScript
-├── server/               # Lógica de backend em Node.js
-└── public/               # Ativos estáticos e redirecionamentos
+## 📁 Estrutura do Projeto
 
+```
+J.A.R.V.I.S/
+├── components/       # Componentes React da interface
+├── hooks/            # Custom hooks (conexão com backend, status de API)
+├── public/           # Arquivos estáticos
+├── server/           # Backend para gerenciamento de APIs
+├── src/              # Código fonte principal
+├── utils/            # Utilitários (ex: downsampling de áudio)
+├── App.tsx           # Componente raiz da aplicação
+├── index.html        # Entry point HTML
+├── index.tsx         # Entry point React
+├── types.ts          # Definições de tipos TypeScript
+├── metadata.json     # Metadados do projeto
+├── netlify.toml      # Configuração de deploy Netlify
+├── vite.config.ts    # Configuração do Vite
+└── package.json      # Dependências e scripts
+```
 
-🔧 Instalação e Execução
+---
 
-Clonar o repositório:
+## 🚀 Como Rodar Localmente
 
-git clone [https://github.com/guilhermebarcelos06/j.a.r.v.i.s.git](https://github.com/guilhermebarcelos06/j.a.r.v.i.s.git)
+### Pré-requisitos
 
+- [Node.js](https://nodejs.org/) v18+
+- npm ou yarn
 
-Instalar dependências:
+### Instalação
 
+```bash
+# Clone o repositório
+git clone https://github.com/guilhermebarcelos06/J.A.R.V.I.S.git
+
+# Entre no diretório
+cd J.A.R.V.I.S
+
+# Instale as dependências
 npm install
+```
 
+### Configuração
 
-Iniciar o servidor de desenvolvimento:
+Crie um arquivo `.env` na raiz do projeto com suas chaves de API:
 
+```env
+VITE_API_KEY=sua_chave_aqui
+# Adicione outras variáveis conforme necessário
+```
+
+### Rodando
+
+```bash
+# Modo desenvolvimento
 npm run dev
 
+# Build para produção
+npm run build
 
-Configurar o Servidor (opcional):
+# Preview da build
+npm run preview
+```
 
-cd server && npm install && npm start
-
-
-🛡️ Licença
-
-Este projeto foi desenvolvido para fins de estudo e entretenimento. 
-Todos os direitos de imagem e marca "JARVIS / Iron Man" pertencem à Marvel/Disney.
+---
 
 
-Desenvolvido por Guilherme Barcelos
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+---
+
+<div align="center">
+  Feito com ❤️ por <a href="https://github.com/guilhermebarcelos06">guilhermebarcelos06</a>
+</div>
